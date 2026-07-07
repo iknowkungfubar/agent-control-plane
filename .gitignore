@@ -12,3 +12,6 @@ uv.lock
 *.db
 config.yaml
 acp-export.*
+
+# Hermes SDLC local state
+.hermes/
