@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notification Settings — ACP</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { --bg: #0f1117; --bg-card: #1a1d27; --text: #e1e4ed; --text-dim: #8b8fa3; --border: #2a2d3a; --accent: #6366f1; --green: #22c55e; --red: #ef4444; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); padding: 2rem; line-height: 1.5; }
+  h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+  .subtitle { color: var(--text-dim); margin-bottom: 2rem; font-size: 0.9rem; }
+  .section { margin-bottom: 2rem; }
+  .section h2 { font-size: 1.1rem; margin-bottom: 1rem; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+  .channel-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
+  .channel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+  .channel-name { font-weight: 600; font-size: 1rem; }
+  .channel-badge { font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: 4px; }
+  .channel-badge.enabled { background: rgba(34, 197, 94, 0.15); color: var(--green); }
+  .channel-badge.disabled { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+  .field { margin-bottom: 0.75rem; }
+  .field label { display: block; font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.25rem; }
+  .field input, .field select { width: 100%; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9rem; }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+  .toggle-btn { padding: 0.4rem 1rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); cursor: pointer; font-size: 0.85rem; }
+  .toggle-btn:hover { border-color: var(--accent); }
+  .save-btn { padding: 0.6rem 1.5rem; background: var(--accent); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500; }
+  .save-btn:hover { opacity: 0.9; }
+  .status-msg { padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1rem; display: none; }
+  .status-msg.success { display: block; background: rgba(34, 197, 94, 0.1); border: 1px solid var(--green); color: var(--green); }
+  .status-msg.error { display: block; background: rgba(239, 68, 68, 0.1); border: 1px solid var(--red); color: var(--red); }
+  .back-link { display: inline-block; margin-top: 1.5rem; color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+  .back-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+  <h1>Notification Settings</h1>
+  <p class="subtitle">Configure notification channels for alert delivery</p>
+
+  <div id="status" class="status-msg"></div>
+
+  <div class="section">
+    <h2>Channels</h2>
+    <div id="channels-container">Loading...</div>
+  </div>
+
+  <p><a href="/" class="back-link">← Back to Dashboard</a></p>
+
+  <script>
+    const CHANNEL_DEFAULTS = {
+      webhook: { name: 'Webhook', fields: [
+        { key: 'url', label: 'Webhook URL', type: 'url', placeholder: 'https://hooks.example.com/alert' },
+      ]},
+      slack: { name: 'Slack', fields: [
+        { key: 'url', label: 'Slack Webhook URL', type: 'url', placeholder: 'https://hooks.slack.com/services/...' },
+      ]},
+      discord: { name: 'Discord', fields: [
+        { key: 'url', label: 'Discord Webhook URL', type: 'url', placeholder: 'https://discord.com/api/webhooks/...' },
+      ]},
+    };
+
+    let currentConfig = {};
+
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/notification-settings');
+        currentConfig = await res.json();
+        renderChannels();
+      } catch (e) {
+        document.getElementById('channels-container').innerHTML =
+          '<p style="color: var(--red);">Failed to load settings</p>';
+      }
+    }
+
+    function renderChannels() {
+      const container = document.getElementById('channels-container');
+      const channels = currentConfig.channels || {};
+      let html = '';
+      for (const [key, def] of Object.entries(CHANNEL_DEFAULTS)) {
+        const cfg = channels[key] || { enabled: false, url: '' };
+        html += `
+          <div class="channel-card" data-channel="${key}">
+            <div class="channel-header">
+              <span class="channel-name">${def.name}</span>
+              <span>
+                <span class="channel-badge ${cfg.enabled ? 'enabled' : 'disabled'}">
+                  ${cfg.enabled ? 'Enabled' : 'Disabled'}
+                </span>
+                <button class="toggle-btn" onclick="toggleChannel('${key}')">
+                  ${cfg.enabled ? 'Disable' : 'Enable'}
+                </button>
+              </span>
+            </div>
+            ${def.fields.map(f => `
+              <div class="field">
+                <label for="field-${key}-${f.key}">${f.label}</label>
+                <input id="field-${key}-${f.key}" type="${f.type}"
+                  placeholder="${f.placeholder}"
+                  value="${(cfg[f.key] || '')}"
+                  ${cfg.enabled ? '' : 'disabled'}
+                  onchange="updateChannelField('${key}', '${f.key}', this.value)">
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+      html += `<button class="save-btn" onclick="saveSettings()">Save Changes</button>`;
+      container.innerHTML = html;
+    }
+
+    function toggleChannel(name) {
+      if (!currentConfig.channels) currentConfig.channels = {};
+      if (!currentConfig.channels[name]) currentConfig.channels[name] = { enabled: false, url: '' };
+      currentConfig.channels[name].enabled = !currentConfig.channels[name].enabled;
+      renderChannels();
+    }
+
+    function updateChannelField(channel, field, value) {
+      if (!currentConfig.channels) currentConfig.channels = {};
+      if (!currentConfig.channels[channel]) currentConfig.channels[channel] = { enabled: false };
+      currentConfig.channels[channel][field] = value;
+    }
+
+    async function saveSettings() {
+      const status = document.getElementById('status');
+      try {
+        const res = await fetch('/api/notification-settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(currentConfig),
+        });
+        if (res.ok) {
+          status.className = 'status-msg success';
+          status.textContent = 'Settings saved successfully';
+        } else {
+          status.className = 'status-msg error';
+          status.textContent = 'Failed to save settings';
+        }
+      } catch (e) {
+        status.className = 'status-msg error';
+        status.textContent = 'Network error saving settings';
+      }
+      setTimeout(() => { status.className = 'status-msg'; }, 3000);
+    }
+
+    loadSettings();
+  </script>
+</body>
+</html>

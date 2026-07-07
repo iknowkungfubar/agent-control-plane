@@ -156,7 +156,7 @@ def dispatch_alerts(alerts: list[dict[str, Any]]) -> None:
         if _is_rate_limited(alert["agent_name"], f"dispatch:{alert['type']}", rate_limit):
             continue
 
-        # Record to history
+        # Record to alert history
         record_alert(
             agent_name=alert["agent_name"],
             alert_type=alert["type"],
@@ -164,23 +164,16 @@ def dispatch_alerts(alerts: list[dict[str, Any]]) -> None:
             message=alert["message"],
         )
 
-        # Dispatch per channel
-        for channel_name, channel_cfg in channels.items():
-            if not channel_cfg.get("enabled", False):
-                continue
+        # Dispatch via notification service to all enabled channels
+        from agent_control_plane.notifications.service import send_notification
 
-            try:
-                if channel_name == "webhook":
-                    _dispatch_webhook(channel_cfg.get("url", ""), alert)
-                elif channel_name == "slack":
-                    _dispatch_slack(channel_cfg, alert)
-                elif channel_name == "email":
-                    _dispatch_email(channel_cfg, alert)
-            except Exception as e:
-                import logging
-                logging.getLogger(__name__).warning(
-                    "Failed to dispatch alert via %s: %s", channel_name, e,
-                )
+        send_notification(
+            alert_type=alert["type"],
+            agent_name=alert["agent_name"],
+            status=alert["status"],
+            message=alert["message"],
+            enabled_channels=channels,
+        )
 
 
 def dispatch_drift_alert(

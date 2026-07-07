@@ -185,6 +185,22 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("shadow-report", help="Show shadow IT risk summary")
 
+    # notify commands
+    notify_p = sub.add_parser("notify", help="Manage notification channels and history")
+    notify_sub = notify_p.add_subparsers(dest="notify_command", help="Notify sub-command")
+
+    notify_list = notify_sub.add_parser("list", help="List notification delivery history")
+    notify_list.add_argument("--channel", type=str, default=None, help="Filter by channel (webhook, slack, discord)")
+    notify_list.add_argument("--agent", type=str, default=None, help="Filter by agent name")
+    notify_list.add_argument("--type", type=str, default=None, help="Filter by alert type (DOWN, RECOVERY, etc.)")
+    notify_list.add_argument("--limit", type=int, default=20, help="Max results (default: 20)")
+
+    notify_test = notify_sub.add_parser("test", help="Send a test notification")
+    notify_test.add_argument("--agent", type=str, default="test-agent", help="Agent name to use in test")
+    notify_test.add_argument("--webhook-url", type=str, default=None, help="Webhook URL override")
+    notify_test.add_argument("--slack-url", type=str, default=None, help="Slack webhook URL override")
+    notify_test.add_argument("--discord-url", type=str, default=None, help="Discord webhook URL override")
+
     return parser
 
 
@@ -925,6 +941,76 @@ def cmd_shadow_report() -> None:
             console.print(f"  [red]⚠[/red] {s.name} ({s.host}:{s.port}) — {s.service_type}")
 
 
+def cmd_notify_list(limit: int = 20, channel: str | None = None, agent_name: str | None = None, alert_type: str | None = None) -> None:
+    """Show notification delivery history."""
+    from agent_control_plane.notifications.service import get_notification_history
+
+    notifications = get_notification_history(
+        channel=channel,
+        agent_name=agent_name,
+        alert_type=alert_type,
+        limit=limit,
+    )
+
+    if not notifications:
+        console.print("[yellow]No notification history found[/yellow]")
+        return
+
+    table = Table(title=f"Notification History (last {len(notifications)})")
+    table.add_column("Time", style="dim")
+    table.add_column("Channel", style="cyan")
+    table.add_column("Type", style="magenta")
+    table.add_column("Agent", style="bold")
+    table.add_column("Delivered", justify="center")
+    table.add_column("Message")
+
+    for n in notifications:
+        sent_at = n.get("sent_at", "")[:19] if n.get("sent_at") else ""
+        delivered = "[green]✓[/green]" if n.get("success") else "[red]✗[/red]"
+        table.add_row(
+            sent_at,
+            n.get("channel", ""),
+            n.get("alert_type", ""),
+            n.get("agent_name", ""),
+            delivered,
+            (n.get("message", "") or "")[:80],
+        )
+
+    console.print(table)
+
+
+def cmd_notify_test(
+    agent_name: str = "test-agent",
+    webhook_url: str | None = None,
+    slack_url: str | None = None,
+    discord_url: str | None = None,
+) -> list[dict]:
+    """Send a test notification to verify channel configuration."""
+    from agent_control_plane.notifications.service import send_test_notification
+
+    console.print(f"[bold]Sending test notification for '{agent_name}'...[/bold]")
+    results = send_test_notification(
+        agent_name=agent_name,
+        webhook_url=webhook_url,
+        slack_url=slack_url,
+        discord_url=discord_url,
+    )
+
+    if not results:
+        console.print("[yellow]No notification channels are enabled.[/yellow]")
+        console.print("  Enable channels via 'acp notify settings' or edit config.yaml")
+        return results
+
+    for r in results:
+        status = "[green]✓[/green]" if r["success"] else "[red]✗[/red]"
+        channel = r.get("channel", "?")
+        error = f" — {r.get('error', '')}" if r.get("error") else ""
+        console.print(f"  {status} {channel}{error}")
+
+    console.print("[bold]Test notification complete.[/bold]")
+    return results
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
     parser = _build_parser()
@@ -968,6 +1054,23 @@ def main(argv: list[str] | None = None) -> int:
             cmd_shadow_list()
         elif args.command == "shadow-report":
             cmd_shadow_report()
+        elif args.command == "notify":
+            if args.notify_command == "list":
+                cmd_notify_list(
+                    limit=args.limit,
+                    channel=args.channel,
+                    agent_name=args.agent,
+                    alert_type=args.type,
+                )
+            elif args.notify_command == "test":
+                cmd_notify_test(
+                    agent_name=args.agent,
+                    webhook_url=args.webhook_url,
+                    slack_url=args.slack_url,
+                    discord_url=args.discord_url,
+                )
+            else:
+                console.print("[yellow]Usage: acp notify list|test[/yellow]")
         elif args.command == "user":
             cmd_user(args)
         elif args.command == "team":

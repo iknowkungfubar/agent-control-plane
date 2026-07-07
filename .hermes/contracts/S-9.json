@@ -1,0 +1,35 @@
+{
+  "sprint": "S-9",
+  "feature": "Notification Integration Hub \u2014 wire alert engine to Slack, Discord, webhook channels with history tracking and dashboard management",
+  "behaviors": [],
+  "success_criteria": [
+    "HTTP webhook sender: generic POST with JSON payload, custom headers, timeout, retry",
+    "Slack webhook sender: POST formatted Slack blocks to Slack webhook URL",
+    "Discord webhook sender: Discord embed formatting with color-coded status fields",
+    "Notification service: routes alert events to all enabled channels with batching and rate-limit dedup",
+    "Notification history DB table with delivery status, channel, agent, message preview",
+    "Dashboard notification settings page: enable/disable channels, configure URLs per channel",
+    "Dashboard notification history page: table view with channel/agent/status filter, pagination",
+    "CLI: acp notify list and acp notify test (send test message) commands",
+    "All 241 existing tests pass, 40+ new tests for notification senders and routing",
+    "README updated with notification setup and channel configuration"
+  ],
+  "e2e_test_paths": [
+    "tests/test_e2e_*.py",
+    "tests/test_e2e*.py"
+  ],
+  "status": "in_progress",
+  "proposed_by": "generator",
+  "evaluator_accepted": true,
+  "failed_criteria": [],
+  "created_at": "2026-07-07T09:37:48.441407+00:00",
+  "updated_at": "2026-07-07T09:37:52.063921+00:00",
+  "amendments": [],
+  "history": [
+    {
+      "event": "proposed",
+      "note": "Proposed by generator: Notification Integration Hub \u2014 wire alert engine to Slack, Discord, webhook channels with history tracking and dashboard management",
+      "at": "2026-07-07T09:37:48.441732+00:00"
+    }
+  ]
+}

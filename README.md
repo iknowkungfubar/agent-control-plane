@@ -3,7 +3,7 @@
 **AI Agent Operations Platform** — discover, inventory, monitor, and track costs for AI agents across your organization.
 
 [![Tests](https://github.com/iknowkungfubar/agent-control-plane/actions/workflows/ci.yml/badge.svg)](https://github.com/iknowkungfubar/agent-control-plane/actions)
-[![Coverage](https://img.shields.io/badge/coverage-80%25-yellowgreen)](https://github.com/iknowkungfubar/agent-control-plane)
+[![Coverage](https://img.shields.io/badge/coverage-70%25-yellow)](https://github.com/iknowkungfubar/agent-control-plane)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
@@ -24,6 +24,7 @@ Existing tools (Langfuse, LangSmith, Arize) focus on **LLM tracing for developer
 
 - **Agent Discovery** — Scan configured endpoints and register agents in inventory
 - **Health Monitoring** — Ping agent endpoints, detect failures and degradation
+- **Alerts & Notifications** — Slack, Discord, webhook, and email alert delivery with history tracking
 - **Cost Tracking** — Estimate monthly spend per agent/provider
 - **Inventory Management** — Full CRUD for agent records with status history
 - **Web Dashboard** — Real-time browser UI with fleet status, agent list, health history, and cost breakdown
@@ -238,6 +239,8 @@ Agent Control Plane can automatically notify you when agents change status.
 | **DOWN** | Agent transitions from online → offline, or consecutive failures exceed threshold |
 | **DEGRADED** | Agent transitions from online → degraded |
 | **RECOVERY** | Agent recovers from offline/degraded → online |
+| **DRIFT** | Configuration drift detected on an agent |
+| **TEST** | Test notification sent to verify channel configuration |
 
 ### Configuration
 
@@ -262,6 +265,9 @@ alerts:
     slack:
       enabled: true
       url: "https://hooks.slack.com/services/..."
+    discord:
+      enabled: true
+      url: "https://discord.com/api/webhooks/..."
     email:
       enabled: true
       smtp_host: "smtp.gmail.com"
@@ -272,6 +278,32 @@ alerts:
       recipients:
         - "ops@example.com"
 ```
+
+### Test Notifications
+
+Send a test message to verify your channel configuration:
+
+```bash
+acp notify test
+acp notify test --webhook-url "https://hooks.example.com/alert"
+acp notify test --slack-url "https://hooks.slack.com/services/..." --discord-url "https://discord.com/api/webhooks/..."
+```
+
+### Notification History
+
+View delivery history from the CLI:
+
+```bash
+acp notify list
+acp notify list --channel slack --agent my-agent
+acp notify list --type DOWN --limit 50
+```
+
+Or from the dashboard at `/notifications` — filter by channel, agent, alert type, and delivery status.
+
+### Dashboard Notification Settings
+
+Configure notification channels from the web UI at `/notification-settings`. Enable/disable channels and update webhook URLs without editing the config file.
 
 ### Alert History API
 

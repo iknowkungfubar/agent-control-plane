@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notification History — ACP</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { --bg: #0f1117; --bg-card: #1a1d27; --text: #e1e4ed; --text-dim: #8b8fa3; --border: #2a2d3a; --accent: #6366f1; --green: #22c55e; --red: #ef4444; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); padding: 2rem; line-height: 1.5; }
+  h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+  .subtitle { color: var(--text-dim); margin-bottom: 1.5rem; font-size: 0.9rem; }
+  .filters { display: flex; gap: 0.75rem; margin-bottom: 1.5rem; flex-wrap: wrap; align-items: end; }
+  .filters label { font-size: 0.8rem; color: var(--text-dim); display: block; margin-bottom: 0.25rem; }
+  .filters input, .filters select { padding: 0.4rem 0.6rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.85rem; }
+  .filters button { padding: 0.4rem 1rem; background: var(--accent); color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+  table { width: 100%; border-collapse: collapse; background: var(--bg-card); border-radius: 8px; overflow: hidden; }
+  th, td { padding: 0.65rem 0.85rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+  th { font-size: 0.75rem; text-transform: uppercase; color: var(--text-dim); letter-spacing: 0.05em; }
+  .success { color: var(--green); }
+  .fail { color: var(--red); }
+  .badge { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.75rem; font-weight: 600; }
+  .badge-down { background: rgba(239,68,68,0.15); color: var(--red); }
+  .badge-recovery { background: rgba(34,197,94,0.15); color: var(--green); }
+  .badge-degraded { background: rgba(234,179,8,0.15); color: #eab308; }
+  .badge-test { background: rgba(99,102,241,0.15); color: var(--accent); }
+  .badge-other { background: rgba(139,143,163,0.15); color: var(--text-dim); }
+  .empty { text-align: center; padding: 2rem; color: var(--text-dim); }
+  .pagination { display: flex; justify-content: center; gap: 0.5rem; margin-top: 1rem; }
+  .pagination button { padding: 0.3rem 0.75rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; }
+  .pagination button:disabled { opacity: 0.4; cursor: default; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+  <h1>Notification History</h1>
+  <p class="subtitle">Delivery log for all alert notifications</p>
+
+  <div class="filters">
+    <div>
+      <label>Channel</label>
+      <select id="filter-channel">
+        <option value="">All</option>
+        <option value="webhook">Webhook</option>
+        <option value="slack">Slack</option>
+        <option value="discord">Discord</option>
+      </select>
+    </div>
+    <div>
+      <label>Agent</label>
+      <input id="filter-agent" placeholder="Agent name">
+    </div>
+    <div>
+      <label>Type</label>
+      <select id="filter-type">
+        <option value="">All</option>
+        <option value="DOWN">DOWN</option>
+        <option value="DEGRADED">DEGRADED</option>
+        <option value="RECOVERY">RECOVERY</option>
+        <option value="DRIFT">DRIFT</option>
+        <option value="TEST">TEST</option>
+      </select>
+    </div>
+    <div>
+      <label>Status</label>
+      <select id="filter-status">
+        <option value="">All</option>
+        <option value="1">Delivered</option>
+        <option value="0">Failed</option>
+      </select>
+    </div>
+    <div>
+      <button onclick="loadHistory(0)">Filter</button>
+    </div>
+  </div>
+
+  <div id="summary" style="margin-bottom: 1rem; font-size: 0.85rem; color: var(--text-dim);"></div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Channel</th>
+        <th>Type</th>
+        <th>Agent</th>
+        <th>Status</th>
+        <th>Message</th>
+        <th>Delivered</th>
+      </tr>
+    </thead>
+    <tbody id="history-body">
+      <tr><td colspan="7" class="empty">Loading...</td></tr>
+    </tbody>
+  </table>
+
+  <div class="pagination">
+    <button id="prev-btn" onclick="prevPage()" disabled>Previous</button>
+    <span id="page-info" style="padding: 0.3rem 0.5rem; color: var(--text-dim); font-size: 0.85rem;">Page 1</span>
+    <button id="next-btn" onclick="nextPage()">Next</button>
+  </div>
+
+  <p><a href="/" class="back-link">← Back to Dashboard</a></p>
+
+  <script>
+    let currentPage = 0;
+    const PAGE_SIZE = 30;
+
+    function getFilters() {
+      const params = new URLSearchParams();
+      const channel = document.getElementById('filter-channel').value;
+      const agent = document.getElementById('filter-agent').value;
+      const type = document.getElementById('filter-type').value;
+      const status = document.getElementById('filter-status').value;
+      if (channel) params.set('channel', channel);
+      if (agent) params.set('agent_name', agent);
+      if (type) params.set('alert_type', type);
+      if (status) params.set('success', status);
+      params.set('limit', PAGE_SIZE);
+      params.set('offset', currentPage * PAGE_SIZE);
+      return params;
+    }
+
+    async function loadHistory(page) {
+      currentPage = page;
+      const params = getFilters();
+      try {
+        const res = await fetch(`/api/notifications?${params}`);
+        const data = await res.json();
+        const tbody = document.getElementById('history-body');
+
+        if (data.notifications && data.notifications.length > 0) {
+          tbody.innerHTML = data.notifications.map(n => {
+            const badgeClass = {
+              'DOWN': 'badge-down', 'DEGRADED': 'badge-degraded',
+              'RECOVERY': 'badge-recovery', 'TEST': 'badge-test',
+            }[n.alert_type] || 'badge-other';
+            const sentAt = n.sent_at ? new Date(n.sent_at).toLocaleString() : '-';
+            return `<tr>
+              <td style="white-space: nowrap; font-size: 0.8rem;">${sentAt}</td>
+              <td>${n.channel || '-'}</td>
+              <td><span class="badge ${badgeClass}">${n.alert_type}</span></td>
+              <td>${n.agent_name}</td>
+              <td>${n.status || '-'}</td>
+              <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${n.message || '-'}</td>
+              <td class="${n.success ? 'success' : 'fail'}">${n.success ? '✓' : '✗'}</td>
+            </tr>`;
+          }).join('');
+        } else {
+          tbody.innerHTML = '<tr><td colspan="7" class="empty">No notifications found</td></tr>';
+        }
+
+        document.getElementById('page-info').textContent = `Page ${currentPage + 1}`;
+        document.getElementById('prev-btn').disabled = currentPage === 0;
+        document.getElementById('next-btn').disabled = !data.notifications || data.notifications.length < PAGE_SIZE;
+      } catch (e) {
+        document.getElementById('history-body').innerHTML =
+          '<tr><td colspan="7" class="empty" style="color: var(--red);">Failed to load</td></tr>';
+      }
+    }
+
+    function prevPage() { if (currentPage > 0) loadHistory(currentPage - 1); }
+    function nextPage() { loadHistory(currentPage + 1); }
+
+    loadHistory(0);
+  </script>
+</body>
+</html>

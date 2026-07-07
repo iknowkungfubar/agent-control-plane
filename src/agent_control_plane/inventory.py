@@ -124,6 +124,25 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
     except sqlite3.OperationalError:
         pass  # Column already exists
 
+    # Migrate: add notification_history table
+    try:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS notification_history (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                channel         TEXT NOT NULL,
+                alert_type      TEXT NOT NULL,
+                agent_name      TEXT NOT NULL,
+                status          TEXT,
+                message         TEXT,
+                success         INTEGER NOT NULL DEFAULT 0,
+                error           TEXT,
+                sent_at         TEXT NOT NULL
+            );
+        """)
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
     # Migrate: add shadow_catalog table
     try:
         conn.executescript("""

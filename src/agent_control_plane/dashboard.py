@@ -61,6 +61,8 @@ def create_app() -> FastAPI:
     _html_404 = _read_template("404.html")
     _html_login = _read_template("login.html")
     _html_shadow = _read_template("shadow.html")
+    _html_notifications = _read_template("notifications.html")
+    _html_notification_settings = _read_template("notification_settings.html")
 
     # ------------------------------------------------------------------
     # Auth Routes
@@ -254,6 +256,16 @@ def create_app() -> FastAPI:
     def shadow_page():
         """Shadow AI discovery page."""
         return HTMLResponse(content=_html_shadow)
+
+    @app.get("/notifications", response_class=HTMLResponse)
+    def notifications_page():
+        """Notification history page."""
+        return HTMLResponse(content=_html_notifications)
+
+    @app.get("/notification-settings", response_class=HTMLResponse)
+    def notification_settings_page():
+        """Notification settings page."""
+        return HTMLResponse(content=_html_notification_settings)
 
     # ------------------------------------------------------------------
     # HTML Page Routes
@@ -499,6 +511,73 @@ def create_app() -> FastAPI:
         lines.append(f"acp_fleet_monthly_cost_est {stats.total_estimated_cost_monthly_usd}")
 
         return PlainTextResponse("\n".join(lines) + "\n")
+
+    # ------------------------------------------------------------------
+    # Notification Integration Hub Routes (Sprint S-9)
+    # ------------------------------------------------------------------
+
+    @app.get("/api/notification-settings")
+    def api_notification_settings():
+        """Get current notification channel configuration."""
+        from agent_control_plane.alerts.rules import load_alert_config
+        cfg = load_alert_config()
+        return {"channels": cfg.get("channels", {})}
+
+    @app.put("/api/notification-settings")
+    async def api_update_notification_settings(request: Request):
+        """Update notification channel configuration."""
+        import yaml
+        from agent_control_plane.config import _resolve_config_path
+        from agent_control_plane.alerts.engine import _reset_config_cache
+
+        body = await request.json()
+        cfg_path = _resolve_config_path()
+        if not cfg_path or not cfg_path.exists():
+            raise HTTPException(status_code=404, detail="Config file not found")
+
+        raw = cfg_path.read_text()
+        cfg = yaml.safe_load(raw) or {}
+
+        if "channels" in body:
+            if "alerts" not in cfg:
+                cfg["alerts"] = {}
+            cfg["alerts"]["channels"] = body["channels"]
+
+        cfg_path.write_text(yaml.dump(cfg, default_flow_style=False))
+        _reset_config_cache()
+        return {"status": "ok"}
+
+    @app.get("/api/notifications")
+    def api_notifications(
+        channel: str | None = None,
+        agent_name: str | None = None,
+        alert_type: str | None = None,
+        success: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ):
+        """Notification history with filters."""
+        from agent_control_plane.notifications.service import get_notification_history
+
+        success_bool: bool | None = None
+        if success is not None:
+            success_bool = success in ("1", "true", "True")
+
+        notifications = get_notification_history(
+            channel=channel or None,
+            agent_name=agent_name or None,
+            alert_type=alert_type or None,
+            success=success_bool,
+            limit=min(limit, 200),
+            offset=offset,
+        )
+        return {"notifications": notifications, "count": len(notifications)}
+
+    @app.get("/api/notifications/summary")
+    def api_notifications_summary():
+        """Notification summary counts."""
+        from agent_control_plane.notifications.service import get_notification_summary
+        return get_notification_summary()
 
     # ------------------------------------------------------------------
     # HTML Page Routes
