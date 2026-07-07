@@ -86,6 +86,12 @@ def run_health_checks(
             error=error,
         )
 
+        # Evaluate alerts
+        from agent_control_plane.alerts.engine import evaluate_alerts, dispatch_alerts
+        alerts = evaluate_alerts(endpoint.name, status)
+        if alerts:
+            dispatch_alerts(alerts)
+
         # Update agent record
         existing = get_agent(conn, endpoint.name)
         if existing:

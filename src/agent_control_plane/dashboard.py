@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 from agent_control_plane.config import get_home
 from agent_control_plane.inventory import (
@@ -155,6 +155,58 @@ def create_app() -> FastAPI:
             media_type="application/json",
             headers={"Content-Disposition": "attachment; filename=acp-inventory.json"},
         )
+
+    @app.get("/api/alerts")
+    def api_alerts(limit: int = 50, agent: str | None = None):
+        """Alert history."""
+        from agent_control_plane.alerts.history import get_alert_history
+        history = get_alert_history(agent_name=agent, limit=limit)
+        return {"alerts": history, "count": len(history)}
+
+    @app.get("/metrics")
+    def prometheus_metrics():
+        """Prometheus metrics endpoint — agent health in text format."""
+        conn = _conn()
+        agents = list_agents(conn)
+        stats = get_summary_stats(conn)
+        conn.close()
+
+        lines = [
+            "# HELP acp_agent_online Current online status of AI agents (1=online, 0=offline)",
+            "# TYPE acp_agent_online gauge",
+        ]
+        for a in agents:
+            lines.append(f'acp_agent_online{{name="{a.name}",provider="{a.provider}"}} {1 if a.status.value == "online" else 0}')
+
+        lines.append("")
+        lines.append("# HELP acp_agent_response_ms Average response time in milliseconds")
+        lines.append("# TYPE acp_agent_response_ms gauge")
+        for a in agents:
+            lines.append(f'acp_agent_response_ms{{name="{a.name}"}} {a.avg_response_time_ms}')
+
+        lines.append("")
+        lines.append("# HELP acp_agent_checks_total Total health checks performed")
+        lines.append("# TYPE acp_agent_checks_total counter")
+        for a in agents:
+            lines.append(f'acp_agent_checks_total{{name="{a.name}"}} {a.total_checks}')
+
+        lines.append("")
+        lines.append("# HELP acp_agent_checks_successful Successful health checks")
+        lines.append("# TYPE acp_agent_checks_successful counter")
+        for a in agents:
+            lines.append(f'acp_agent_checks_successful{{name="{a.name}"}} {a.successful_checks}')
+
+        lines.append("")
+        lines.append("# HELP acp_fleet_agents_total Total number of agents in inventory")
+        lines.append("# TYPE acp_fleet_agents_total gauge")
+        lines.append(f"acp_fleet_agents_total {stats.total_agents}")
+
+        lines.append("")
+        lines.append("# HELP acp_fleet_monthly_cost_est Estimated monthly cost for all agents (USD)")
+        lines.append("# TYPE acp_fleet_monthly_cost_est gauge")
+        lines.append(f"acp_fleet_monthly_cost_est {stats.total_estimated_cost_monthly_usd}")
+
+        return PlainTextResponse("\n".join(lines) + "\n")
 
     # ------------------------------------------------------------------
     # HTML Page Routes

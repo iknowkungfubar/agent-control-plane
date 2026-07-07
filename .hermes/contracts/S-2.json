@@ -1,0 +1,35 @@
+{
+  "sprint": "S-2",
+  "feature": "Agent Control Plane Web UI Dashboard",
+  "behaviors": [],
+  "success_criteria": [
+    "Dashboard shows real-time fleet status summary (total, online, offline, degraded counts)",
+    "Dashboard page lists all agents with name, provider, status, last-seen, and response time",
+    "Health history view shows timeline of health checks for each agent with status changes",
+    "Cost view displays monthly cost breakdown per agent with totals",
+    "Export button on UI triggers JSON download of current inventory",
+    "Auto-refresh dashboard every 30 seconds or manual refresh button",
+    "FastAPI server starts with single command and serves dashboard on localhost",
+    "Responsive layout works on desktop and tablet browsers",
+    "At least 70% test coverage on backend API routes",
+    "README updated with dashboard setup and usage instructions"
+  ],
+  "e2e_test_paths": [
+    "tests/test_e2e_*.py",
+    "tests/test_e2e*.py"
+  ],
+  "status": "in_progress",
+  "proposed_by": "generator",
+  "evaluator_accepted": true,
+  "failed_criteria": [],
+  "created_at": "2026-07-07T02:41:02.873382+00:00",
+  "updated_at": "2026-07-07T02:41:06.796051+00:00",
+  "amendments": [],
+  "history": [
+    {
+      "event": "proposed",
+      "note": "Proposed by generator: Agent Control Plane Web UI Dashboard",
+      "at": "2026-07-07T02:41:02.873616+00:00"
+    }
+  ]
+}

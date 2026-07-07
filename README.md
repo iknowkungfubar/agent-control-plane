@@ -182,6 +182,84 @@ agents:
 | `acp delete <name>` | Remove an agent from inventory |
 | `acp dashboard [--host HOST] [--port PORT]` | Start the web UI dashboard |
 
+## Alerts & Notifications
+
+Agent Control Plane can automatically notify you when agents change status.
+
+### Alert Types
+
+| Type | When |
+|------|------|
+| **DOWN** | Agent transitions from online → offline, or consecutive failures exceed threshold |
+| **DEGRADED** | Agent transitions from online → degraded |
+| **RECOVERY** | Agent recovers from offline/degraded → online |
+
+### Configuration
+
+```yaml
+# config.yaml
+agents:
+  - name: my-agent
+    url: http://localhost:8080
+    alerts:
+      consecutive_failures: 5         # Per-agent override (default: 3)
+      rate_limit_seconds: 600         # Per-agent override (default: 300)
+
+alerts:
+  enabled: true
+  global:
+    consecutive_failures: 3           # Alert after N consecutive failures
+    rate_limit_seconds: 300           # Max 1 alert per N seconds per agent
+  channels:
+    webhook:
+      enabled: true
+      url: "https://hooks.example.com/alerts"
+    slack:
+      enabled: true
+      url: "https://hooks.slack.com/services/..."
+    email:
+      enabled: true
+      smtp_host: "smtp.gmail.com"
+      smtp_port: 587
+      smtp_user: "user@gmail.com"
+      smtp_password: "app-password"
+      from: "acp@example.com"
+      recipients:
+        - "ops@example.com"
+```
+
+### Alert History API
+
+GET `/api/alerts?limit=50&agent=my-agent` returns recent alerts.
+
+## Prometheus Metrics
+
+The dashboard exposes a `/metrics` endpoint in Prometheus text format:
+
+```bash
+curl http://localhost:8337/metrics
+# HELP acp_agent_online Current online status of AI agents (1=online, 0=offline)
+# TYPE acp_agent_online gauge
+acp_agent_online{name="my-agent",provider="openai"} 1
+# HELP acp_agent_response_ms Average response time in milliseconds
+# TYPE acp_agent_response_ms gauge
+acp_agent_response_ms{name="my-agent"} 45.2
+# HELP acp_fleet_agents_total Total number of agents in inventory
+# TYPE acp_fleet_agents_total gauge
+acp_fleet_agents_total 3
+```
+
+### Available Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `acp_agent_online` | gauge | 1 if agent is online, 0 otherwise |
+| `acp_agent_response_ms` | gauge | Average response time per agent |
+| `acp_agent_checks_total` | counter | Total health checks performed |
+| `acp_agent_checks_successful` | counter | Successful health checks |
+| `acp_fleet_agents_total` | gauge | Total agents in inventory |
+| `acp_fleet_monthly_cost_est` | gauge | Estimated monthly cost (USD) |
+
 ## Dashboard
 
 The Agent Control Plane includes a browser-based dashboard for real-time fleet visibility.

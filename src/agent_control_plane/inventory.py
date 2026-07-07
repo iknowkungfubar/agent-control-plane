@@ -51,6 +51,15 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
             last_updated    TEXT NOT NULL,
             PRIMARY KEY (agent_name, month)
         );
+
+        CREATE TABLE IF NOT EXISTS alert_history (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_name      TEXT NOT NULL,
+            alert_type      TEXT NOT NULL,
+            status          TEXT NOT NULL,
+            message         TEXT,
+            timestamp       TEXT NOT NULL
+        );
     """)
     conn.commit()
 
