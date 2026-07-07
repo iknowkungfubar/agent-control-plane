@@ -175,6 +175,16 @@ def _build_parser() -> argparse.ArgumentParser:
     team_rm_agent = team_sub.add_parser("remove-agent", help="Remove an agent from a team")
     team_rm_agent.add_argument("--agent", type=str, required=True, help="Agent name")
 
+    # shadow commands
+    shadow_p = sub.add_parser("shadow-scan", help="Scan for shadow AI/SaaS services")
+    shadow_p.add_argument("--cidr", type=str, default=None, help="CIDR range to scan (e.g. 10.0.0.0/24)")
+    shadow_p.add_argument("--host", type=str, default=None, help="Single host to scan")
+    shadow_p.add_argument("--ports", type=str, default=None, help="Ports to scan (comma-separated)")
+
+    sub.add_parser("shadow-list", help="List discovered shadow IT services")
+
+    sub.add_parser("shadow-report", help="Show shadow IT risk summary")
+
     return parser
 
 
@@ -751,6 +761,170 @@ def cmd_team(args: argparse.Namespace) -> None:
         console.print("[yellow]Unknown team subcommand[/yellow]")
 
 
+# ---------------------------------------------------------------------------
+# Shadow AI / SaaS Discovery commands
+# ---------------------------------------------------------------------------
+
+
+def cmd_shadow_scan(args: argparse.Namespace) -> None:
+    """Scan for shadow AI/SaaS services."""
+    from agent_control_plane.shadow_scanner import (
+        register_shadow_discovery,
+        scan_cidr,
+        scan_host,
+    )
+
+    ports = None
+    if args.ports:
+        ports = [int(p.strip()) for p in args.ports.split(",") if p.strip()]
+
+    if args.cidr:
+        console.print(f"[bold]Scanning {args.cidr} for shadow IT services...[/bold]")
+        results = scan_cidr(args.cidr, ports=ports)
+    elif args.host:
+        console.print(f"[bold]Scanning host {args.host}...[/bold]")
+        results = scan_host(args.host, ports=ports)
+    else:
+        # Default: scan localhost
+        console.print("[bold]Scanning localhost for shadow IT services...[/bold]")
+        results = scan_host("127.0.0.1", ports=ports)
+
+    if not results:
+        console.print("[green]✓ No shadow IT services detected.[/green]")
+        return
+
+    # Display results
+    table = Table(title=f"Shadow AI/SaaS Discovery — {len(results)} service(s)")
+    table.add_column("Service", style="cyan")
+    table.add_column("Type")
+    table.add_column("Risk")
+    table.add_column("Host")
+    table.add_column("Port")
+    table.add_column("Details")
+
+    risk_colors = {
+        "critical": "bold red",
+        "high": "red",
+        "medium": "yellow",
+        "low": "cyan",
+        "unknown": "white",
+    }
+
+    for r in results:
+        color = risk_colors.get(r.get("risk", "unknown"), "white")
+        table.add_row(
+            r.get("name", "Unknown")[:40],
+            r.get("service_type", "unknown"),
+            f"[{color}]{r.get('risk', 'unknown')}[/{color}]",
+            r.get("host", ""),
+            str(r.get("port", "")),
+            r.get("fingerprint", "")[:30],
+        )
+
+    console.print(table)
+    console.print("")
+
+    # Auto-register if user confirms
+    count = register_shadow_discovery(results)
+    console.print(f"[green]✓[/green] {count} service(s) registered in shadow catalog.")
+
+
+def cmd_shadow_list() -> None:
+    """List discovered shadow IT services."""
+    from agent_control_plane.inventory import list_shadow_services, get_shadow_summary
+
+    conn = get_connection()
+    services = list_shadow_services(conn)
+    summary = get_shadow_summary(conn)
+    conn.close()
+
+    if not services:
+        console.print("[yellow]No shadow IT services discovered yet.[/yellow]")
+        console.print("Run 'acp shadow-scan' first.")
+        return
+
+    # Summary header
+    console.print(f"[bold]Shadow IT Catalog:[/bold] {summary.get('total', 0)} total service(s)")
+    by_risk = summary.get("by_risk", {})
+    for risk in ("critical", "high", "medium", "low", "unknown"):
+        count = by_risk.get(risk, 0)
+        if count > 0:
+            console.print(f"  {risk}: {count}")
+    console.print("")
+
+    # Service table
+    table = Table(title="Discovered Services")
+    table.add_column("ID", justify="right")
+    table.add_column("Service", style="cyan")
+    table.add_column("Type")
+    table.add_column("Risk")
+    table.add_column("Host:Port")
+    table.add_column("First Seen")
+
+    risk_colors = {
+        "critical": "bold red",
+        "high": "red",
+        "medium": "yellow",
+        "low": "cyan",
+        "unknown": "white",
+    }
+
+    for s in services:
+        color = risk_colors.get(s.risk, "white")
+        table.add_row(
+            str(s.id or ""),
+            s.name[:40],
+            s.service_type,
+            f"[{color}]{s.risk}[/{color}]",
+            f"{s.host}:{s.port}" if s.port else s.host,
+            s.first_seen.strftime("%m-%d %H:%M"),
+        )
+
+    console.print(table)
+
+
+def cmd_shadow_report() -> None:
+    """Show shadow IT risk summary."""
+    from agent_control_plane.inventory import list_shadow_services, get_shadow_summary
+
+    conn = get_connection()
+    services = list_shadow_services(conn)
+    summary = get_shadow_summary(conn)
+    conn.close()
+
+    if not services:
+        console.print("[yellow]No shadow IT services discovered yet.[/yellow]")
+        return
+
+    # Risk breakdown
+    console.print("[bold]Shadow AI Risk Report[/bold]")
+    console.print("=" * 50)
+
+    total = summary.get("total", 0)
+    by_risk = summary.get("by_risk", {})
+    by_type = summary.get("by_type", {})
+
+    console.print(f"\n[bold]Total Services:[/bold] {total}")
+    console.print("")
+
+    console.print("[bold]By Risk Level:[/bold]")
+    for risk in ("critical", "high", "medium", "low", "unknown"):
+        count = by_risk.get(risk, 0)
+        if count > 0:
+            console.print(f"  {risk}: {count}")
+
+    console.print("\n[bold]By Category:[/bold]")
+    for stype in sorted(by_type.keys()):
+        console.print(f"  {stype}: {by_type[stype]}")
+
+    # Top critical/high services
+    critical = [s for s in services if s.risk in ("critical", "high")]
+    if critical:
+        console.print(f"\n[bold red]Critical & High Risk Services ({len(critical)}):[/bold red]")
+        for s in critical[:10]:
+            console.print(f"  [red]⚠[/red] {s.name} ({s.host}:{s.port}) — {s.service_type}")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
     parser = _build_parser()
@@ -788,6 +962,12 @@ def main(argv: list[str] | None = None) -> int:
             cmd_drift_check(name=args.name, timeout=args.timeout)
         elif args.command == "drift-report":
             cmd_drift_report()
+        elif args.command == "shadow-scan":
+            cmd_shadow_scan(args)
+        elif args.command == "shadow-list":
+            cmd_shadow_list()
+        elif args.command == "shadow-report":
+            cmd_shadow_report()
         elif args.command == "user":
             cmd_user(args)
         elif args.command == "team":

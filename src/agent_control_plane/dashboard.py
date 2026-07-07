@@ -60,6 +60,7 @@ def create_app() -> FastAPI:
     _html_costs = _read_template("costs.html")
     _html_404 = _read_template("404.html")
     _html_login = _read_template("login.html")
+    _html_shadow = _read_template("shadow.html")
 
     # ------------------------------------------------------------------
     # Auth Routes
@@ -216,6 +217,43 @@ def create_app() -> FastAPI:
             })
         conn.close()
         return {"teams": result}
+
+    # ------------------------------------------------------------------
+    # Shadow AI Routes (Sprint S-8)
+    # ------------------------------------------------------------------
+
+    @app.get("/api/shadow")
+    def api_shadow():
+        """List discovered shadow IT services."""
+        from agent_control_plane.inventory import list_shadow_services
+        conn = _conn()
+        services = list_shadow_services(conn)
+        conn.close()
+        return {
+            "services": [
+                {
+                    "id": s.id, "name": s.name, "url": s.url,
+                    "service_type": s.service_type, "risk": s.risk,
+                    "host": s.host, "port": s.port,
+                    "first_seen": s.first_seen.isoformat() if s.first_seen else None,
+                }
+                for s in services
+            ]
+        }
+
+    @app.get("/api/shadow/summary")
+    def api_shadow_summary():
+        """Shadow IT risk summary."""
+        from agent_control_plane.inventory import get_shadow_summary
+        conn = _conn()
+        summary = get_shadow_summary(conn)
+        conn.close()
+        return {"summary": summary}
+
+    @app.get("/shadow", response_class=HTMLResponse)
+    def shadow_page():
+        """Shadow AI discovery page."""
+        return HTMLResponse(content=_html_shadow)
 
     # ------------------------------------------------------------------
     # HTML Page Routes

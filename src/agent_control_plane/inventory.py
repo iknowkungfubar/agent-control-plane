@@ -14,6 +14,7 @@ from agent_control_plane.models import (
     ConfigBaseline,
     CostRecord,
     DriftRecord,
+    ShadowService,
     SummaryStats,
     Team,
     TeamMember,
@@ -122,6 +123,28 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
         conn.commit()
     except sqlite3.OperationalError:
         pass  # Column already exists
+
+    # Migrate: add shadow_catalog table
+    try:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS shadow_catalog (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                name            TEXT NOT NULL,
+                url             TEXT NOT NULL,
+                service_type    TEXT NOT NULL DEFAULT 'unknown',
+                risk            TEXT NOT NULL DEFAULT 'unknown',
+                host            TEXT NOT NULL DEFAULT '',
+                port            INTEGER NOT NULL DEFAULT 0,
+                discovered_by   TEXT NOT NULL DEFAULT 'port_scan',
+                first_seen      TEXT NOT NULL,
+                last_seen       TEXT NOT NULL,
+                tags            TEXT NOT NULL DEFAULT '[]',
+                metadata        TEXT NOT NULL DEFAULT '{}'
+            );
+        """)
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
 
 
 def get_connection(db_path: Path | None = None) -> sqlite3.Connection:
@@ -663,3 +686,119 @@ def unassign_agent_from_team(conn: sqlite3.Connection, agent_name: str) -> None:
         "UPDATE agents SET team_id = NULL WHERE name = ?", (agent_name,),
     )
     conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# Shadow Catalog CRUD
+# ---------------------------------------------------------------------------
+
+
+def upsert_shadow_service(conn: sqlite3.Connection, svc: ShadowService) -> int:
+    """Insert or update a shadow service entry.
+
+    Returns the ID of the record.
+    """
+    existing = conn.execute(
+        "SELECT id FROM shadow_catalog WHERE url = ? AND service_type = ?",
+        (svc.url, svc.service_type),
+    ).fetchone()
+
+    if existing:
+        conn.execute(
+            """UPDATE shadow_catalog SET
+               name=?, risk=?, last_seen=?, tags=?, metadata=?
+               WHERE id=?""",
+            (svc.name, svc.risk, svc.last_seen.isoformat(),
+             json.dumps(svc.tags), json.dumps(svc.metadata), existing["id"]),
+        )
+        conn.commit()
+        return existing["id"]
+    else:
+        cursor = conn.execute(
+            """INSERT INTO shadow_catalog
+               (name, url, service_type, risk, host, port, discovered_by,
+                first_seen, last_seen, tags, metadata)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (svc.name, svc.url, svc.service_type, svc.risk,
+             svc.host, svc.port, svc.discovered_by,
+             svc.first_seen.isoformat(), svc.last_seen.isoformat(),
+             json.dumps(svc.tags), json.dumps(svc.metadata)),
+        )
+        conn.commit()
+        return cursor.lastrowid
+
+
+def list_shadow_services(
+    conn: sqlite3.Connection,
+    risk: str | None = None,
+    service_type: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[ShadowService]:
+    """List shadow IT services with optional filters."""
+    conditions: list[str] = []
+    params: list[str | int] = []
+
+    if risk:
+        conditions.append("risk = ?")
+        params.append(risk)
+    if service_type:
+        conditions.append("service_type = ?")
+        params.append(service_type)
+
+    where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+    query = f"SELECT * FROM shadow_catalog{where} ORDER BY last_seen DESC LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+
+    rows = conn.execute(query, params).fetchall()
+    return [_row_to_shadow(r) for r in rows]
+
+
+def get_shadow_service(conn: sqlite3.Connection, service_id: int) -> ShadowService | None:
+    """Get a single shadow service by ID."""
+    row = conn.execute(
+        "SELECT * FROM shadow_catalog WHERE id = ?", (service_id,)
+    ).fetchone()
+    return _row_to_shadow(row) if row else None
+
+
+def delete_shadow_service(conn: sqlite3.Connection, service_id: int) -> None:
+    """Delete a shadow service entry."""
+    conn.execute("DELETE FROM shadow_catalog WHERE id = ?", (service_id,))
+    conn.commit()
+
+
+def get_shadow_summary(conn: sqlite3.Connection) -> dict[str, Any]:
+    """Get shadow IT summary counts by risk level and type."""
+    by_risk: dict[str, int] = {}
+    rows = conn.execute(
+        "SELECT risk, COUNT(*) as cnt FROM shadow_catalog GROUP BY risk"
+    ).fetchall()
+    for r in rows:
+        by_risk[r["risk"]] = r["cnt"]
+
+    by_type: dict[str, int] = {}
+    rows = conn.execute(
+        "SELECT service_type, COUNT(*) as cnt FROM shadow_catalog GROUP BY service_type"
+    ).fetchall()
+    for r in rows:
+        by_type[r["service_type"]] = r["cnt"]
+
+    return {"by_risk": by_risk, "by_type": by_type, "total": sum(by_risk.values())}
+
+
+def _row_to_shadow(row: sqlite3.Row) -> ShadowService:
+    return ShadowService(
+        id=row["id"],
+        name=row["name"],
+        url=row["url"],
+        service_type=row["service_type"],
+        risk=row["risk"],
+        host=row["host"],
+        port=row["port"],
+        discovered_by=row["discovered_by"],
+        first_seen=datetime.fromisoformat(row["first_seen"]),
+        last_seen=datetime.fromisoformat(row["last_seen"]),
+        tags=json.loads(row["tags"]),
+        metadata=json.loads(row["metadata"]),
+    )

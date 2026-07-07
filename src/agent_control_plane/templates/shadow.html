@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shadow AI — Agent Control Plane</title>
+    <link rel="stylesheet" href="/static/base.css">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg: #0f1117; --bg-card: #1a1d27; --bg-hover: #232638;
+            --text: #e1e4ed; --text-dim: #8b8fa3; --border: #2a2d3a;
+            --green: #34d399; --red: #f87171; --yellow: #fbbf24; --blue: #60a5fa; --gray: #6b7280;
+            --accent: #6366f1; --radius: 8px;
+        }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 2rem; }
+        h1 { margin-bottom: 0.25rem; }
+        .subtitle { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1.5rem; }
+        .status-bar { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
+        .status-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.5rem; min-width: 120px; flex: 1; }
+        .status-card .count { font-size: 1.8rem; font-weight: 700; }
+        .status-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .heatmap { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 2rem; }
+        .heatmap-item { padding: 1rem; border-radius: var(--radius); min-width: 150px; flex: 1; text-align: center; border: 1px solid var(--border); }
+        .heatmap-item .count { font-size: 2rem; font-weight: 700; }
+        .heatmap-item .label { font-size: 0.75rem; }
+        table { width: 100%; border-collapse: collapse; background: var(--bg-card); border-radius: var(--radius); overflow: hidden; }
+        th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { font-size: 0.75rem; text-transform: uppercase; color: var(--text-dim); }
+        .badge { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+        .badge.critical { background: rgba(248,113,113,0.2); color: #fca5a5; }
+        .badge.high { background: rgba(248,113,113,0.12); color: var(--red); }
+        .badge.medium { background: rgba(251,191,36,0.12); color: var(--yellow); }
+        .badge.low { background: rgba(52,211,153,0.12); color: var(--green); }
+        .badge.unknown { background: rgba(107,114,128,0.12); color: var(--gray); }
+        a { color: var(--blue); text-decoration: none; }
+        .empty { text-align: center; padding: 3rem; color: var(--text-dim); }
+        @media (max-width: 768px) { .status-bar { flex-direction: column; } }
+    </style>
+</head>
+<body>
+    <h1>👁 Shadow AI Discovery</h1>
+    <p class="subtitle">Detected AI tools, SaaS services, and unauthorized endpoints in your environment</p>
+
+    <div class="status-bar" id="summary-bar">
+        <div class="status-card"><div class="count" id="total-count">...</div><div class="label">Total Services</div></div>
+        <div class="status-card"><div class="count" id="critical-count" style="color:#fca5a5">...</div><div class="label">Critical Risk</div></div>
+        <div class="status-card"><div class="count" id="high-count" style="color:var(--red)">...</div><div class="label">High Risk</div></div>
+        <div class="status-card"><div class="count" id="medium-count" style="color:var(--yellow)">...</div><div class="label">Medium Risk</div></div>
+    </div>
+
+    <div class="heatmap" id="heatmap-categories"></div>
+
+    <table>
+        <thead><tr><th>Service</th><th>Type</th><th>Risk</th><th>Host</th><th>Port</th><th>First Seen</th></tr></thead>
+        <tbody id="services-tbody"><tr><td colspan="6" class="loading">Loading...</td></tr></tbody>
+    </table>
+
+    <p style="margin-top:1rem;"><a href="/">← Back to Dashboard</a></p>
+
+    <script>
+    async function loadShadow() {
+        try {
+            const [listRes, summaryRes] = await Promise.all([
+                fetch('/api/shadow'),
+                fetch('/api/shadow/summary'),
+            ]);
+            const listData = await listRes.json();
+            const summaryData = await summaryRes.json();
+
+            // Summary bar
+            const summary = summaryData.summary || {};
+            const byRisk = summary.by_risk || {};
+            const total = summary.total || 0;
+            document.getElementById('total-count').textContent = total;
+            document.getElementById('critical-count').textContent = byRisk.critical || 0;
+            document.getElementById('high-count').textContent = byRisk.high || 0;
+            document.getElementById('medium-count').textContent = byRisk.medium || 0;
+
+            // Category heatmap
+            const byType = summary.by_type || {};
+            const heatmapEl = document.getElementById('heatmap-categories');
+            const catLabels = { 'ai-api': 'AI APIs', 'self-hosted-llm': 'Self-Hosted LLMs', 'coding-agent': 'Coding Agents', 'ai-browser': 'AI Browsers', 'vector-db': 'Vector DBs', 'mcp-server': 'MCP Servers', 'ai-dev-tool': 'AI Dev Tools', 'saas-app': 'SaaS Apps', 'unknown': 'Unknown' };
+            heatmapEl.innerHTML = Object.entries(byType).map(([type, count]) => `
+                <div class="heatmap-item" style="background:var(--bg-card);">
+                    <div class="count" style="color:var(--accent);">${count}</div>
+                    <div class="label">${catLabels[type] || type}</div>
+                </div>
+            `).join('');
+
+            // Service table
+            const services = listData.services || [];
+            const tbody = document.getElementById('services-tbody');
+            if (services.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty">No shadow IT services discovered. Run <code>acp shadow-scan</code>.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = services.map(s => `
+                <tr>
+                    <td>${s.name}</td>
+                    <td>${s.service_type}</td>
+                    <td><span class="badge ${s.risk}">${s.risk}</span></td>
+                    <td>${s.host}${s.port ? ':' + s.port : ''}</td>
+                    <td>${s.port || '—'}</td>
+                    <td>${s.first_seen ? new Date(s.first_seen).toLocaleDateString() : '—'}</td>
+                </tr>
+            `).join('');
+        } catch(e) {
+            document.getElementById('services-tbody').innerHTML = `<tr><td colspan="6" class="error">Failed to load: ${e.message}</td></tr>`;
+        }
+    }
+    loadShadow();
+    </script>
+</body>
+</html>

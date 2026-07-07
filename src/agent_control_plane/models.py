@@ -202,3 +202,60 @@ class SummaryStats:
     unknown: int
     total_estimated_cost_monthly_usd: float
     total_checks_run: int
+
+
+class ShadowRisk(str, Enum):
+    """Risk level for a discovered shadow IT service."""
+
+    CRITICAL = "critical"  # Data exfiltration risk, no auth
+    HIGH = "high"  # Known vulnerabilities, unapproved
+    MEDIUM = "medium"  # Shadow IT, but some controls
+    LOW = "low"  # Sanctioned or low-risk service
+    UNKNOWN = "unknown"
+
+
+class ShadowCategory(str, Enum):
+    """Category of shadow IT service."""
+
+    AI_API = "ai-api"
+    SELF_HOSTED_LLM = "self-hosted-llm"
+    CODING_AGENT = "coding-agent"
+    AI_BROWSER = "ai-browser"
+    VECTOR_DB = "vector-db"
+    MCP_SERVER = "mcp-server"
+    AI_DEV_TOOL = "ai-dev-tool"
+    BROWSER_EXTENSION = "browser-extension"
+    SAAS_APP = "saas-app"
+    UNKNOWN = "unknown"
+
+
+@dataclass
+class ShadowFingerprint:
+    """A detection signature for a known AI/SaaS service."""
+
+    name: str
+    category: ShadowCategory
+    paths: list[str]  # URL paths to probe
+    body_patterns: list[str]  # Strings to match in response body
+    header_patterns: dict[str, str]  # {header_name: expected_value_pattern}
+    port_hints: list[int]  # Common ports
+    risk: ShadowRisk = ShadowRisk.MEDIUM
+    description: str = ""
+
+
+@dataclass
+class ShadowService:
+    """A discovered shadow IT service in the catalog."""
+
+    id: int | None = None
+    name: str = ""
+    url: str = ""
+    service_type: str = "unknown"  # Matches ShadowCategory value
+    risk: str = "unknown"  # Matches ShadowRisk value
+    host: str = ""
+    port: int = 0
+    discovered_by: str = ""  # "port_scan", "dns_analysis", "proxy"
+    first_seen: datetime = field(default_factory=lambda: datetime.now(UTC))
+    last_seen: datetime = field(default_factory=lambda: datetime.now(UTC))
+    tags: list[str] = field(default_factory=list)
+    metadata: dict[str, str] = field(default_factory=dict)
