@@ -1,9 +1,10 @@
 """Agent Control Plane — Agent Discovery Subsystem."""
 
-from agent_control_plane.discovery.scanner import probe_endpoint, scan_ports, register_discovered
-
 # Restore original discovery.py API for backward compatibility
+from datetime import UTC
+
 from agent_control_plane.config import load_config, parse_agents
+from agent_control_plane.discovery.scanner import probe_endpoint, register_discovered, scan_ports
 
 
 def get_configured_agents() -> list:
@@ -19,14 +20,15 @@ def scan_and_report() -> list:
 
 def sync_inventory() -> list:
     """Sync configured agents into inventory (original API)."""
-    from agent_control_plane.inventory import get_connection, upsert_agent, list_agents
     from datetime import datetime, timezone
+
+    from agent_control_plane.inventory import get_connection, list_agents, upsert_agent
     from agent_control_plane.models import AgentRecord, AgentStatus
 
     cfg = load_config()
     endpoints = parse_agents(cfg)
     conn = get_connection()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     for ep in endpoints:
         record = AgentRecord(
@@ -41,6 +43,10 @@ def sync_inventory() -> list:
 
 
 __all__ = [
-    "probe_endpoint", "scan_ports", "register_discovered",
-    "scan_and_report", "get_configured_agents", "sync_inventory",
+    "get_configured_agents",
+    "probe_endpoint",
+    "register_discovered",
+    "scan_and_report",
+    "scan_ports",
+    "sync_inventory",
 ]

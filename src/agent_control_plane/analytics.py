@@ -7,6 +7,7 @@ Supports hour / day / week granularity with configurable lookback windows.
 from __future__ import annotations
 
 import sqlite3
+from datetime import UTC
 from typing import Any
 
 
@@ -28,6 +29,7 @@ def get_health_timeseries(
         List of dicts, each with keys: bucket, online, offline, degraded,
         unknown, count, avg_response_ms, min_response_ms, max_response_ms.
         Ordered from oldest to newest.
+
     """
     _validate_bucket(bucket)
     fmt = _bucket_format(bucket)
@@ -68,6 +70,7 @@ def get_fleet_health_timeseries(
     Returns:
         List of dicts, each with keys: bucket, online, offline, degraded,
         unknown, count, total_agents, avg_response_ms.
+
     """
     _validate_bucket(bucket)
     fmt = _bucket_format(bucket)
@@ -106,6 +109,7 @@ def get_cost_timeseries(
     Returns:
         List of dicts, each with keys: month, total_cost, agents (list of
         {name, cost}). Ordered from oldest to newest.
+
     """
     min_month = _months_ago(months)
 
@@ -176,9 +180,9 @@ def _bucket_format(bucket: str) -> str:
 
 def _months_ago(n: int) -> str:
     """Return a 'YYYY-MM' string for N months ago from today."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     year = now.year
     month = now.month - n
     while month < 1:

@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
-
-import yaml
 
 from agent_control_plane.config import _resolve_config_path
 
@@ -17,6 +14,7 @@ def load_alert_config() -> dict[str, Any]:
 
     Returns:
         The alerts section of config, or default values.
+
     """
     cache_key = str(_resolve_config_path())
     if cache_key in _config_cache:

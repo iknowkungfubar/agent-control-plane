@@ -7,8 +7,7 @@ from __future__ import annotations
 
 import os
 import tempfile
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -39,7 +38,7 @@ def db_with_health_data() -> str:
             ),
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Insert health records across 7 days, 4 per day with varying states
         for day_offset in range(7, -1, -1):
@@ -90,7 +89,7 @@ def db_with_cost_data() -> str:
                     estimated_tokens_in=1_000_000,
                     estimated_tokens_out=500_000,
                     estimated_cost_usd=15.0,
-                    last_updated=datetime.now(timezone.utc),
+                    last_updated=datetime.now(UTC),
                 ),
             )
             upsert_cost_record(
@@ -101,7 +100,7 @@ def db_with_cost_data() -> str:
                     estimated_tokens_in=2_000_000,
                     estimated_tokens_out=1_000_000,
                     estimated_cost_usd=30.0,
-                    last_updated=datetime.now(timezone.utc),
+                    last_updated=datetime.now(UTC),
                 ),
             )
 
@@ -114,7 +113,7 @@ def db_with_cost_data() -> str:
                 estimated_tokens_in=800_000,
                 estimated_tokens_out=400_000,
                 estimated_cost_usd=12.0,
-                last_updated=datetime.now(timezone.utc),
+                last_updated=datetime.now(UTC),
             ),
         )
 
@@ -217,7 +216,7 @@ class TestHealthTimeseries:
             conn,
             AgentRecord(name="test-agent-2", url="http://localhost:9998", provider="custom"),
         )
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         log_health_check(conn, "test-agent-2", AgentStatus.ONLINE, 200.0, 200, timestamp=now - timedelta(hours=1))
         log_health_check(conn, "test-agent-2", AgentStatus.ONLINE, 180.0, 200, timestamp=now - timedelta(hours=2))
 

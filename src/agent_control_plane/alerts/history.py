@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from agent_control_plane.inventory import get_connection
@@ -26,7 +26,7 @@ def record_alert(
             alert_type,
             status,
             message,
-            datetime.now(timezone.utc).isoformat(),
+            datetime.now(UTC).isoformat(),
         ),
     )
     conn.commit()
@@ -49,6 +49,7 @@ def get_alert_history(
 
     Returns:
         List of alert record dicts.
+
     """
     conn = get_connection()
     conditions: list[str] = []

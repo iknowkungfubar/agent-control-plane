@@ -8,8 +8,6 @@ from pathlib import Path
 
 import yaml
 
-from agent_control_plane.models import AgentEndpoint
-
 
 class TestGetConfiguredAgents:
     """Test loading configured agents from config file."""
@@ -21,7 +19,7 @@ class TestGetConfiguredAgents:
             "agents": [
                 {"name": "agent-a", "url": "http://localhost:8000", "provider": "openai"},
                 {"name": "agent-b", "url": "http://localhost:8001", "provider": "anthropic"},
-            ]
+            ],
         }
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             yaml.dump(cfg, f)

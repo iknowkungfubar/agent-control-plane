@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
-
-from agent_control_plane.cost_tracker import estimate_monthly_cost, PROVIDER_COST_PER_1K_IN, PROVIDER_COST_PER_1K_OUT
+from agent_control_plane.cost_tracker import (
+    PROVIDER_COST_PER_1K_IN,
+    PROVIDER_COST_PER_1K_OUT,
+    estimate_monthly_cost,
+)
 
 
 class TestCostEstimation:

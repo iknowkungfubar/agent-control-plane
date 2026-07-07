@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import json
-import os
-import socket
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 
 from agent_control_plane.inventory import get_connection, upsert_agent
-from agent_control_plane.models import AgentEndpoint, AgentRecord, AgentStatus
+from agent_control_plane.models import AgentRecord, AgentStatus
 
 # Cache for already-probed endpoints to avoid duplicate work
 _probed_cache: set[str] = set()
@@ -37,12 +35,12 @@ def _clear_cache() -> None:
 def _make_name(host: str, port: int, provider: str) -> str:
     """Generate a stable agent name from host/port/provider."""
     safe_host = host.replace(".", "-").replace(":", "-")
-    ts = datetime.now(timezone.utc).strftime("%H%M%S")
+    ts = datetime.now(UTC).strftime("%H%M%S")
     return f"agent-{safe_host}-{port}-{ts}"
 
 
 def _check_provider_by_response(
-    url: str, status_code: int, body_text: str, headers: dict[str, str]
+    url: str, status_code: int, body_text: str, headers: dict[str, str],
 ) -> str | None:
     """Identify provider from HTTP response characteristics.
 
@@ -100,6 +98,7 @@ def probe_endpoint(
     Returns:
         Dict with name, url, provider, host, port, status, metadata
         or None if no agent found.
+
     """
     cache_key = f"{host}:{port}"
     if cache_key in _probed_cache:
@@ -145,7 +144,7 @@ def probe_endpoint(
     if found_provider is None and response_body:
         # Last resort: check if anything is running on this port
         found_provider = _check_provider_by_response(
-            base_url, 200, response_body, response_headers
+            base_url, 200, response_body, response_headers,
         )
 
     if found_provider is None:
@@ -158,7 +157,7 @@ def probe_endpoint(
         "host": host,
         "port": port,
         "status": "online",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "metadata": {
             "discovered_by": "port_scan",
             "headers": response_headers,
@@ -182,6 +181,7 @@ def scan_ports(
 
     Returns:
         List of discovery result dicts.
+
     """
     results: list[dict[str, Any]] = []
     for port in ports:
@@ -199,8 +199,9 @@ def register_discovered(info: dict[str, Any]) -> AgentRecord:
 
     Returns:
         The created/updated AgentRecord.
+
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     record = AgentRecord(
         name=info["name"],
         url=info["url"],

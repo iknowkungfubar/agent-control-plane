@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from agent_control_plane.models import (
     AgentRecord,
     AgentStatus,
+    ConfigBaseline,
     CostRecord,
+    DriftRecord,
     SummaryStats,
 )
 
@@ -60,6 +62,28 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
             message         TEXT,
             timestamp       TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS config_baselines (
+            agent_name      TEXT PRIMARY KEY,
+            provider        TEXT NOT NULL,
+            health_check_path TEXT NOT NULL DEFAULT '/health',
+            expected_version TEXT,
+            expected_tags   TEXT NOT NULL DEFAULT '[]',
+            additional_fields TEXT NOT NULL DEFAULT '{}',
+            captured_at     TEXT NOT NULL,
+            captured_by     TEXT NOT NULL DEFAULT 'manual'
+        );
+
+        CREATE TABLE IF NOT EXISTS drift_log (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_name      TEXT NOT NULL,
+            field           TEXT NOT NULL,
+            expected        TEXT NOT NULL,
+            actual          TEXT NOT NULL,
+            severity        TEXT NOT NULL DEFAULT 'medium',
+            message         TEXT,
+            detected_at     TEXT NOT NULL
+        );
     """)
     conn.commit()
 
@@ -69,6 +93,7 @@ def get_connection(db_path: Path | None = None) -> sqlite3.Connection:
     from agent_control_plane.config import get_db_path
 
     path = db_path or get_db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
     _ensure_tables(conn)
@@ -82,7 +107,7 @@ def get_connection(db_path: Path | None = None) -> sqlite3.Connection:
 
 def upsert_agent(conn: sqlite3.Connection, agent: AgentRecord) -> None:
     """Insert or update an agent record."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     conn.execute(
         """
         INSERT INTO agents (name, url, provider, status, tags, first_seen, last_seen,
@@ -117,7 +142,7 @@ def upsert_agent(conn: sqlite3.Connection, agent: AgentRecord) -> None:
 def get_agent(conn: sqlite3.Connection, name: str) -> AgentRecord | None:
     """Get a single agent by name."""
     row = conn.execute(
-        "SELECT * FROM agents WHERE name = ?", (name,)
+        "SELECT * FROM agents WHERE name = ?", (name,),
     ).fetchone()
     return _row_to_agent(row) if row else None
 
@@ -166,7 +191,7 @@ def log_health_check(
     timestamp: datetime | None = None,
 ) -> None:
     """Record a health check result."""
-    ts = (timestamp or datetime.now(timezone.utc)).isoformat()
+    ts = (timestamp or datetime.now(UTC)).isoformat()
     conn.execute(
         """
         INSERT INTO health_log (agent_name, status, response_time_ms, status_code, error, timestamp)
@@ -221,7 +246,7 @@ def upsert_cost_record(conn: sqlite3.Connection, record: CostRecord) -> None:
 def list_cost_records(conn: sqlite3.Connection) -> list[CostRecord]:
     """List all cost records."""
     rows = conn.execute(
-        "SELECT * FROM cost_records ORDER BY month DESC, agent_name"
+        "SELECT * FROM cost_records ORDER BY month DESC, agent_name",
     ).fetchall()
     return [
         CostRecord(
@@ -256,3 +281,144 @@ def get_summary_stats(conn: sqlite3.Connection) -> SummaryStats:
         total_estimated_cost_monthly_usd=total_cost,
         total_checks_run=sum(a.total_checks for a in agents),
     )
+
+
+# ---------------------------------------------------------------------------
+# Config Baselines CRUD
+# ---------------------------------------------------------------------------
+
+
+def upsert_config_baseline(conn: sqlite3.Connection, baseline: ConfigBaseline) -> None:
+    """Insert or update a config baseline for an agent."""
+    conn.execute(
+        """INSERT INTO config_baselines (agent_name, provider, health_check_path,
+           expected_version, expected_tags, additional_fields, captured_at, captured_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(agent_name) DO UPDATE SET
+               provider           = excluded.provider,
+               health_check_path  = excluded.health_check_path,
+               expected_version   = excluded.expected_version,
+               expected_tags      = excluded.expected_tags,
+               additional_fields  = excluded.additional_fields,
+               captured_at        = excluded.captured_at,
+               captured_by        = excluded.captured_by""",
+        (
+            baseline.agent_name,
+            baseline.provider,
+            baseline.health_check_path,
+            baseline.expected_version,
+            json.dumps(baseline.expected_tags),
+            json.dumps(baseline.additional_fields),
+            baseline.captured_at.isoformat(),
+            baseline.captured_by,
+        ),
+    )
+    conn.commit()
+
+
+def get_config_baseline(conn: sqlite3.Connection, agent_name: str) -> ConfigBaseline | None:
+    """Get the config baseline for an agent."""
+    row = conn.execute(
+        "SELECT * FROM config_baselines WHERE agent_name = ?", (agent_name,),
+    ).fetchone()
+    if row is None:
+        return None
+    return ConfigBaseline(
+        agent_name=row["agent_name"],
+        provider=row["provider"],
+        health_check_path=row["health_check_path"],
+        expected_version=row["expected_version"],
+        expected_tags=json.loads(row["expected_tags"]),
+        additional_fields=json.loads(row["additional_fields"]),
+        captured_at=datetime.fromisoformat(row["captured_at"]),
+        captured_by=row["captured_by"],
+    )
+
+
+def list_config_baselines(conn: sqlite3.Connection) -> list[ConfigBaseline]:
+    """List all config baselines."""
+    rows = conn.execute("SELECT * FROM config_baselines ORDER BY agent_name").fetchall()
+    result: list[ConfigBaseline] = []
+    for r in rows:
+        result.append(ConfigBaseline(
+            agent_name=r["agent_name"],
+            provider=r["provider"],
+            health_check_path=r["health_check_path"],
+            expected_version=r["expected_version"],
+            expected_tags=json.loads(r["expected_tags"]),
+            additional_fields=json.loads(r["additional_fields"]),
+            captured_at=datetime.fromisoformat(r["captured_at"]),
+            captured_by=r["captured_by"],
+        ))
+    return result
+
+
+def delete_config_baseline(conn: sqlite3.Connection, agent_name: str) -> None:
+    """Delete a config baseline for an agent."""
+    conn.execute("DELETE FROM config_baselines WHERE agent_name = ?", (agent_name,))
+    conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# Drift Log CRUD
+# ---------------------------------------------------------------------------
+
+
+def log_drift(conn: sqlite3.Connection, drift: DriftRecord) -> None:
+    """Record a drift detection event."""
+    conn.execute(
+        """INSERT INTO drift_log (agent_name, field, expected, actual, severity, message, detected_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (drift.agent_name, drift.field_name, drift.expected, drift.actual,
+         drift.severity, drift.message, drift.detected_at.isoformat()),
+    )
+    conn.commit()
+
+
+def get_drift_history(
+    conn: sqlite3.Connection,
+    agent_name: str | None = None,
+    severity: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[DriftRecord]:
+    """Query drift detection history with optional filters."""
+    conditions: list[str] = []
+    params: list[str | int] = []
+
+    if agent_name:
+        conditions.append("agent_name = ?")
+        params.append(agent_name)
+    if severity:
+        conditions.append("severity = ?")
+        params.append(severity)
+
+    where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+    query = f"SELECT * FROM drift_log{where} ORDER BY detected_at DESC LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+
+    rows = conn.execute(query, params).fetchall()
+    return [
+        DriftRecord(
+            id=r["id"],
+            agent_name=r["agent_name"],
+            field_name=r["field"],
+            expected=r["expected"],
+            actual=r["actual"],
+            severity=r["severity"],
+            message=r["message"],
+            detected_at=datetime.fromisoformat(r["detected_at"]),
+        )
+        for r in rows
+    ]
+
+
+def get_drift_summary(conn: sqlite3.Connection) -> dict[str, int]:
+    """Get summary counts of drift events by severity."""
+    rows = conn.execute(
+        "SELECT severity, COUNT(*) as cnt FROM drift_log GROUP BY severity",
+    ).fetchall()
+    summary: dict[str, int] = {}
+    for r in rows:
+        summary[r["severity"]] = r["cnt"]
+    return summary

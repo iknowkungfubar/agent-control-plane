@@ -21,6 +21,12 @@
     <thead><tr><th>Timestamp</th><th>Status</th><th>Response Time</th><th>HTTP Code</th><th>Error</th></tr></thead>
     <tbody id="health-table-body"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody>
 </table>
+
+<h3 style="margin-top:1.5rem;margin-bottom:0.75rem;">Config Drift History</h3>
+<table>
+    <thead><tr><th>Timestamp</th><th>Field</th><th>Expected</th><th>Actual</th><th>Severity</th><th>Message</th></tr></thead>
+    <tbody id="drift-table-body"><tr><td colspan="6" class="loading">Loading...</td></tr></tbody>
+</table>
 <a href="/agents" style="display:inline-block;margin-top:1rem;">← Back to all agents</a>
 {% endblock %}
 {% block scripts %}
@@ -281,8 +287,34 @@ async function loadAgentDetail() {
                 <div class="status-card"><div class="count">${agent.provider}</div><div class="label">Provider</div></div>
                 <div class="status-card"><div class="count">${agent.avg_response_time_ms > 0 ? agent.avg_response_time_ms + 'ms' : '—'}</div><div class="label">Avg Response</div></div>
                 <div class="status-card"><div class="count">${agent.successful_checks}/${agent.total_checks}</div><div class="label">Checks</div></div>
+                <div class="status-card" id="drift-status-card"><div class="count">...</div><div class="label">Drift Events</div></div>
             `;
         }
+
+        // Load drift data
+        fetch(`/api/drift/${encodeURIComponent(agentName)}?limit=5`).then(r => r.json()).then(driftData => {
+            const driftCard = document.getElementById('drift-status-card');
+            if (driftCard) {
+                const count = driftData.count || 0;
+                const color = count > 5 ? 'var(--red)' : count > 0 ? 'var(--yellow)' : 'var(--green)';
+                driftCard.innerHTML = `<div class="count" style="color:${color}">${count}</div><div class="label">Drift Events</div>`;
+            }
+            const driftBody = document.getElementById('drift-table-body');
+            if (driftBody && driftData.drift_events && driftData.drift_events.length > 0) {
+                driftBody.innerHTML = driftData.drift_events.map(d => `
+                    <tr>
+                        <td>${new Date(d.detected_at).toLocaleString()}</td>
+                        <td>${d.field}</td>
+                        <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;" title="${d.expected}">${d.expected}</td>
+                        <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;" title="${d.actual}">${d.actual}</td>
+                        <td><span class="badge ${d.severity}">${d.severity}</span></td>
+                        <td>${d.message}</td>
+                    </tr>
+                `).join('');
+            } else if (driftBody) {
+                driftBody.innerHTML = '<tr><td colspan="6" class="empty">No drift events recorded.</td></tr>';
+            }
+        });
 
         // Health status trend chart (stacked bar)
         const series = analytics.series || [];

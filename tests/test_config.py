@@ -9,7 +9,12 @@ from pathlib import Path
 import pytest
 import yaml
 
-from agent_control_plane.config import _resolve_home, _resolve_config_path, load_config, parse_agents
+from agent_control_plane.config import (
+    _resolve_config_path,
+    _resolve_home,
+    load_config,
+    parse_agents,
+)
 from agent_control_plane.models import AgentEndpoint
 
 
@@ -98,7 +103,7 @@ class TestParseAgents:
             "agents": [
                 {"name": "a1", "url": "http://localhost:1", "provider": "openai", "tags": ["prod"]},
                 {"name": "a2", "url": "http://localhost:2", "provider": "anthropic"},
-            ]
+            ],
         }
         agents = parse_agents(cfg)
         assert len(agents) == 2

@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from agent_control_plane.inventory import get_connection, list_cost_records, upsert_cost_record
 from agent_control_plane.models import CostRecord
-
 
 # Approximate cost per 1K tokens by provider ($USD)
 PROVIDER_COST_PER_1K_IN = {
@@ -48,10 +47,11 @@ def estimate_monthly_cost(
 
     Returns:
         CostRecord with estimated cost.
+
     """
     cost_in = (tokens_in / 1000) * PROVIDER_COST_PER_1K_IN.get(provider, 0.001)
     cost_out = (tokens_out / 1000) * PROVIDER_COST_PER_1K_OUT.get(provider, 0.004)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     month = now.strftime("%Y-%m")
 
     return CostRecord(
@@ -75,6 +75,7 @@ def record_cost(agent_name: str, provider: str, tokens_in: int, tokens_out: int)
 
     Returns:
         The saved CostRecord.
+
     """
     record = estimate_monthly_cost(agent_name, provider, tokens_in, tokens_out)
     conn = get_connection()
@@ -88,6 +89,7 @@ def get_all_costs() -> list[CostRecord]:
 
     Returns:
         List of CostRecord objects.
+
     """
     conn = get_connection()
     records = list_cost_records(conn)
@@ -100,6 +102,7 @@ def total_monthly_cost() -> float:
 
     Returns:
         Total cost in USD.
+
     """
     records = get_all_costs()
     return round(sum(r.estimated_cost_usd for r in records), 2)

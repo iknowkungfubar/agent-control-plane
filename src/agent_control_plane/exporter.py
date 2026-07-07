@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import csv
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from agent_control_plane.inventory import get_connection, get_summary_stats, list_agents, list_cost_records
+from agent_control_plane.inventory import (
+    get_connection,
+    get_summary_stats,
+    list_agents,
+    list_cost_records,
+)
 
 
 def build_export_data(db_path: Path | None = None) -> dict[str, Any]:
@@ -19,6 +24,7 @@ def build_export_data(db_path: Path | None = None) -> dict[str, Any]:
 
     Returns:
         Dict with agents, cost_records, summary, and export timestamp.
+
     """
     conn = get_connection(db_path)
     agents = list_agents(conn)
@@ -27,7 +33,7 @@ def build_export_data(db_path: Path | None = None) -> dict[str, Any]:
     conn.close()
 
     return {
-        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "exported_at": datetime.now(UTC).isoformat(),
         "summary": {
             "total_agents": summary.total_agents,
             "online": summary.online,
@@ -74,6 +80,7 @@ def export_json(output_path: Path, db_path: Path | None = None) -> Path:
 
     Returns:
         Path to the written file.
+
     """
     data = build_export_data(db_path=db_path)
     output_path.write_text(json.dumps(data, indent=2))
@@ -88,6 +95,7 @@ def export_csv(output_path: Path) -> Path:
 
     Returns:
         Path to the written file.
+
     """
     data = build_export_data()
 

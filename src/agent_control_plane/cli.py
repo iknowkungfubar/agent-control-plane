@@ -7,19 +7,17 @@ import sys
 from pathlib import Path
 
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 
 from agent_control_plane import __version__
 from agent_control_plane.config import get_home
-from agent_control_plane.discovery import scan_and_report
-from agent_control_plane.exporter import export_csv, export_json
-from agent_control_plane.health import check_agent_health, run_health_checks
 from agent_control_plane.cost_tracker import get_all_costs, total_monthly_cost
+from agent_control_plane.discovery import get_configured_agents, scan_and_report
+from agent_control_plane.exporter import export_csv, export_json
+from agent_control_plane.health import run_health_checks
 from agent_control_plane.inventory import get_connection, get_summary_stats, list_agents
-from agent_control_plane.discovery import get_configured_agents
-from agent_control_plane.models import AgentStatus
-
+from agent_control_plane.models import AgentStatus, DriftSeverity
 
 console = Console()
 
@@ -30,7 +28,7 @@ def _build_parser() -> argparse.ArgumentParser:
         description="AI Agent Operations Platform — discover, inventory, monitor, and track costs for AI agents.",
     )
     parser.add_argument(
-        "--version", action="version", version=f"%(prog)s {__version__}"
+        "--version", action="version", version=f"%(prog)s {__version__}",
     )
 
     sub = parser.add_subparsers(dest="command", help="Command to execute")
@@ -98,6 +96,37 @@ def _build_parser() -> argparse.ArgumentParser:
         "--port", "-p", type=int, default=8337,
         help="Port to bind to (default: 8337)",
     )
+
+    # config-baseline
+    cb_p = sub.add_parser("config-baseline", help="Manage agent configuration baselines")
+    cb_sub = cb_p.add_subparsers(dest="config_baseline_command", help="Baseline sub-command")
+
+    cb_capture = cb_sub.add_parser("capture", help="Capture baseline from live agent")
+    cb_capture.add_argument("name", type=str, help="Agent name")
+    cb_capture.add_argument("--timeout", type=float, default=5.0, help="HTTP timeout (default: 5.0s)")
+
+    cb_set = cb_sub.add_parser("set", help="Manually set baseline values")
+    cb_set.add_argument("name", type=str, help="Agent name")
+    cb_set.add_argument("--provider", type=str, default=None, help="Expected provider")
+    cb_set.add_argument("--health-path", type=str, default=None, help="Expected health check path")
+    cb_set.add_argument("--version", type=str, default=None, help="Expected version")
+    cb_set.add_argument("--tags", type=str, default=None, help="Expected tags (comma-separated)")
+
+    cb_show = cb_sub.add_parser("show", help="Show baseline for an agent")
+    cb_show.add_argument("name", type=str, help="Agent name")
+
+    cb_list = cb_sub.add_parser("list", help="List all baselines")
+
+    cb_del = cb_sub.add_parser("delete", help="Delete a baseline")
+    cb_del.add_argument("name", type=str, help="Agent name")
+
+    # drift-check
+    drift_p = sub.add_parser("drift-check", help="Check agents for configuration drift")
+    drift_p.add_argument("--name", type=str, default=None, help="Check specific agent only")
+    drift_p.add_argument("--timeout", type=float, default=5.0, help="HTTP timeout (default: 5.0s)")
+
+    # drift-report
+    sub.add_parser("drift-report", help="Show drift detection history")
 
     return parser
 
@@ -343,6 +372,204 @@ def cmd_discover(
         console.print("Run with --register to add discovered agents to inventory")
 
 
+# ---------------------------------------------------------------------------
+# Config Baseline commands
+# ---------------------------------------------------------------------------
+
+
+def cmd_config_baseline(args: argparse.Namespace) -> None:
+    """Dispatch config-baseline subcommands."""
+    from agent_control_plane.drift import capture_baseline, set_baseline
+
+    if args.config_baseline_command == "capture":
+        result = capture_baseline(args.name, timeout=args.timeout)
+        if result is None:
+            console.print(f"[red]✗[/red] Agent '{args.name}' not found in inventory")
+            return
+        console.print(f"[green]✓[/green] Baseline captured for [bold]{args.name}[/bold]")
+        console.print(f"  Provider: {result.provider}")
+        console.print(f"  Version: {result.expected_version or 'unknown'}")
+
+    elif args.config_baseline_command == "set":
+        tags = None
+        if args.tags:
+            tags = [t.strip() for t in args.tags.split(",") if t.strip()]
+        result = set_baseline(
+            args.name,
+            provider=args.provider,
+            health_check_path=args.health_path,
+            expected_version=args.version,
+            expected_tags=tags,
+        )
+        if result is None:
+            console.print(f"[red]✗[/red] Agent '{args.name}' not found in inventory")
+            return
+        console.print(f"[green]✓[/green] Baseline set for [bold]{args.name}[/bold]")
+
+    elif args.config_baseline_command == "show":
+        from agent_control_plane.inventory import get_config_baseline
+
+        conn = get_connection()
+        baseline = get_config_baseline(conn, args.name)
+        conn.close()
+        if baseline is None:
+            console.print(f"[yellow]No baseline for agent '{args.name}'[/yellow]")
+            return
+        console.print(f"[bold]Baseline: {args.name}[/bold]")
+        console.print(f"  Provider:           {baseline.provider}")
+        console.print(f"  Health Check Path:  {baseline.health_check_path}")
+        console.print(f"  Expected Version:   {baseline.expected_version or 'not set'}")
+        console.print(f"  Expected Tags:      {', '.join(baseline.expected_tags) or 'none'}")
+        console.print(f"  Additional Fields:  {baseline.additional_fields}")
+        console.print(f"  Captured At:        {baseline.captured_at.isoformat()}")
+        console.print(f"  Captured By:        {baseline.captured_by}")
+
+    elif args.config_baseline_command == "list":
+        from agent_control_plane.inventory import list_config_baselines
+
+        conn = get_connection()
+        baselines = list_config_baselines(conn)
+        conn.close()
+        if not baselines:
+            console.print("[yellow]No baselines configured[/yellow]")
+            return
+        table = Table(title="Configuration Baselines")
+        table.add_column("Agent", style="cyan")
+        table.add_column("Provider")
+        table.add_column("Version")
+        table.add_column("Tags")
+        table.add_column("Captured")
+        for b in baselines:
+            table.add_row(
+                b.agent_name,
+                b.provider,
+                b.expected_version or "-",
+                ", ".join(b.expected_tags) or "-",
+                b.captured_at.strftime("%Y-%m-%d %H:%M"),
+            )
+        console.print(table)
+
+    elif args.config_baseline_command == "delete":
+        from agent_control_plane.inventory import delete_config_baseline
+
+        conn = get_connection()
+        delete_config_baseline(conn, args.name)
+        conn.close()
+        console.print(f"[green]✓[/green] Baseline deleted for [bold]{args.name}[/bold]")
+
+    else:
+        console.print("[yellow]Unknown config-baseline subcommand[/yellow]")
+        console.print("Try: capture, set, show, list, delete")
+
+
+# ---------------------------------------------------------------------------
+# Drift check commands
+# ---------------------------------------------------------------------------
+
+
+def cmd_drift_check(name: str | None = None, timeout: float = 5.0) -> None:
+    """Check agents for configuration drift."""
+    from agent_control_plane.drift import check_all_drift, check_drift
+
+    if name:
+        reports = [check_drift(name, timeout=timeout)]
+    else:
+        reports = check_all_drift(timeout=timeout)
+
+    if not reports:
+        console.print("[yellow]No agents with baselines to check[/yellow]")
+        console.print("Run 'acp config-baseline capture <name>' first")
+        return
+
+    severity_colors = {
+        "none": "white",
+        "low": "cyan",
+        "medium": "yellow",
+        "high": "red",
+        "critical": "bold red",
+    }
+
+    total_drift = 0
+    for report in reports:
+        if not report.has_baseline:
+            console.print(f"[yellow]No baseline for '{report.agent_name}'[/yellow] - run 'acp config-baseline capture {report.agent_name}'")
+            continue
+
+        if report.drift_count == 0:
+            console.print(f"[green]✓[/green] [bold]{report.agent_name}[/bold]: no drift detected")
+            continue
+
+        total_drift += report.drift_count
+        sev = report.max_severity.value if isinstance(report.max_severity, DriftSeverity) else str(report.max_severity)
+        color = severity_colors.get(sev, "white")
+        console.print(f"[{color}]⚠[/{color}] [bold]{report.agent_name}[/bold]: {report.drift_count} drift(s), max severity: [{color}]{sev}[/{color}]")
+
+        for r in report.results:
+            if DriftSeverity(r.severity) == DriftSeverity.NONE:
+                continue
+            sc = severity_colors.get(r.severity, "white")
+            console.print(f"  [{sc}]•[/{sc}] {r.message}")
+
+        console.print("")
+
+    if total_drift > 0:
+        console.print(f"\n[bold]{total_drift}[/bold] total drift(s) detected")
+    else:
+        console.print("\n[green]✓ All agents match their baselines[/green]")
+
+
+def cmd_drift_report() -> None:
+    """Show drift detection history."""
+    from agent_control_plane.inventory import get_drift_history, get_drift_summary
+
+    conn = get_connection()
+    summary = get_drift_summary(conn)
+    records = get_drift_history(conn, limit=50)
+    conn.close()
+
+    if not records:
+        console.print("[yellow]No drift events recorded[/yellow]")
+        return
+
+    # Summary
+    console.print("[bold]Drift Summary[/bold]")
+    for sev in ("critical", "high", "medium", "low", "none"):
+        count = summary.get(sev, 0)
+        if count > 0:
+            console.print(f"  {sev}: {count}")
+    console.print("")
+
+    # Recent events
+    table = Table(title="Recent Drift Events")
+    table.add_column("Time", style="dim")
+    table.add_column("Agent", style="cyan")
+    table.add_column("Field")
+    table.add_column("Expected")
+    table.add_column("Actual")
+    table.add_column("Severity")
+
+    severity_colors = {
+        "none": "white",
+        "low": "cyan",
+        "medium": "yellow",
+        "high": "red",
+        "critical": "bold red",
+    }
+
+    for r in records:
+        color = severity_colors.get(r.severity, "white")
+        table.add_row(
+            r.detected_at.strftime("%m-%d %H:%M"),
+            r.agent_name,
+            r.field_name,
+            r.expected[:40] if r.expected else "-",
+            r.actual[:40] if r.actual else "-",
+            f"[{color}]{r.severity}[/{color}]",
+        )
+
+    console.print(table)
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
     parser = _build_parser()
@@ -374,6 +601,12 @@ def main(argv: list[str] | None = None) -> int:
                 host=args.host, ports=args.ports,
                 register=args.register, timeout=args.timeout,
             )
+        elif args.command == "config-baseline":
+            cmd_config_baseline(args)
+        elif args.command == "drift-check":
+            cmd_drift_check(name=args.name, timeout=args.timeout)
+        elif args.command == "drift-report":
+            cmd_drift_report()
         else:
             parser.print_help()
     except FileNotFoundError as e:

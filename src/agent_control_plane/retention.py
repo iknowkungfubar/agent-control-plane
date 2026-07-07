@@ -19,6 +19,7 @@ def enforce_retention(conn: sqlite3.Connection, retention_days: int | None = Non
 
     Returns:
         Number of deleted records.
+
     """
     if retention_days is None:
         retention_days = get_retention_days()

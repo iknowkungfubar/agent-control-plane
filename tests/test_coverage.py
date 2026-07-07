@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from collections.abc import Generator
+from datetime import UTC
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from threading import Thread
-from typing import Generator
 
 import pytest
 import yaml
@@ -38,7 +39,6 @@ class _DegradedHandler(BaseHTTPRequestHandler):
     """Handler returning degraded status JSON."""
 
     def do_GET(self):
-        import json
         if self.path == "/health":
             data = json.dumps({"status": "degraded", "reason": "high latency"}).encode()
             self.send_response(200)
@@ -81,9 +81,10 @@ class TestCoverageHealth:
 
     def test_malformed_json(self):
         """Non-JSON response still counts as online."""
-        from agent_control_plane.health import check_agent_health
         # Connect to something that doesn't return JSON
         import socket
+
+        from agent_control_plane.health import check_agent_health
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
@@ -117,7 +118,7 @@ class TestCoverageCost:
 
     def test_record_and_retrieve_cost(self):
         """record_cost persists and get_all_costs retrieves."""
-        from agent_control_plane.cost_tracker import record_cost, get_all_costs, total_monthly_cost
+        from agent_control_plane.cost_tracker import get_all_costs, record_cost, total_monthly_cost
         record_cost("cost-test", "openai", 500000, 100000)
         records = get_all_costs()
         assert len(records) == 1
@@ -127,16 +128,17 @@ class TestCoverageCost:
 
     def test_record_multiple_months(self):
         """Cost records for different months both appear."""
-        from agent_control_plane.cost_tracker import record_cost, get_all_costs
-        from agent_control_plane.models import CostRecord
+        from datetime import datetime
+
+        from agent_control_plane.cost_tracker import get_all_costs, record_cost
         from agent_control_plane.inventory import get_connection, upsert_cost_record
-        from datetime import datetime, timezone
+        from agent_control_plane.models import CostRecord
 
         # Use direct DB insert for a different month
         conn = get_connection()
         upsert_cost_record(conn, CostRecord(
             agent_name="old", month="2026-01", estimated_cost_usd=50.0,
-            last_updated=datetime.now(timezone.utc),
+            last_updated=datetime.now(UTC),
         ))
         conn.close()
 
@@ -146,7 +148,10 @@ class TestCoverageCost:
 
     def test_provider_rates(self):
         """All cost rates are non-negative."""
-        from agent_control_plane.cost_tracker import PROVIDER_COST_PER_1K_IN, PROVIDER_COST_PER_1K_OUT
+        from agent_control_plane.cost_tracker import (
+            PROVIDER_COST_PER_1K_IN,
+            PROVIDER_COST_PER_1K_OUT,
+        )
         for provider, rate in PROVIDER_COST_PER_1K_IN.items():
             assert rate >= 0, f"Negative in rate for {provider}"
         for provider, rate in PROVIDER_COST_PER_1K_OUT.items():

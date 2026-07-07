@@ -45,8 +45,8 @@ def format_slack(
                 ],
                 "footer": "Agent Control Plane",
                 "ts": __import__("time").time(),
-            }
-        ]
+            },
+        ],
     }
 
 
@@ -60,6 +60,7 @@ def format_email(
 
     Returns:
         Tuple of (subject, body_text).
+
     """
     emoji = {
         "DOWN": "🔴",
@@ -112,6 +113,7 @@ def send_email(
         smtp_password: Optional SMTP auth password.
         from_addr: From address.
         use_tls: Use STARTTLS.
+
     """
     msg = EmailMessage()
     msg.set_content(body)

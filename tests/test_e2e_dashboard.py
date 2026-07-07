@@ -6,11 +6,11 @@ requests. Covers all REST API routes and static page serving.
 
 from __future__ import annotations
 
-import json
 import os
 import tempfile
+from collections.abc import Generator
+from datetime import UTC
 from pathlib import Path
-from typing import Generator
 
 import pytest
 import yaml
@@ -31,7 +31,7 @@ def app_client() -> Generator[TestClient, None, None]:
             "agents": [
                 {"name": "agent-alpha", "url": "http://localhost:18080", "provider": "openai", "tags": ["prod"]},
                 {"name": "agent-beta", "url": "http://localhost:18081", "provider": "anthropic", "tags": ["staging"]},
-            ]
+            ],
         }
         cfg_path = Path(tmp) / "config.yaml"
         with open(cfg_path, "w") as f:
@@ -94,8 +94,9 @@ class TestDashboardE2E:
         """GET /api/agents with empty DB returns empty list."""
         with tempfile.TemporaryDirectory() as tmp:
             os.environ["ACP_HOME"] = tmp
-            from agent_control_plane.dashboard import create_app
             from starlette.testclient import TestClient
+
+            from agent_control_plane.dashboard import create_app
             app = create_app()
             client = TestClient(app)
             resp = client.get("/api/agents")
@@ -239,19 +240,20 @@ class TestDashboardE2E:
             old_home = os.environ.get("ACP_HOME")
             os.environ["ACP_HOME"] = tmp
 
+            from datetime import datetime
+
             from agent_control_plane.dashboard import create_app
             from agent_control_plane.inventory import get_connection, log_health_check, upsert_agent
             from agent_control_plane.models import AgentRecord, AgentStatus
-            from datetime import datetime, timezone
 
             # Set up agent + health data
             conn = get_connection()
             upsert_agent(conn, AgentRecord(
                 name="test-a", url="http://localhost:1", provider="custom",
             ))
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             for i in range(24):
-                ts = now.replace(hour=i % 24, minute=0) - __import__('datetime').timedelta(hours=i)
+                ts = now.replace(hour=i % 24, minute=0) - __import__("datetime").timedelta(hours=i)
                 log_health_check(conn, "test-a", AgentStatus.ONLINE, 100.0, 200, timestamp=ts)
             conn.close()
 

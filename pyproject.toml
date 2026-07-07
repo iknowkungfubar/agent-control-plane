@@ -49,7 +49,7 @@ select = ["ALL"]
 ignore = [
     "S101",   # assert allowed — we use pytest
     "D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107",  # docstrings pre-existing
-    "ANK001", # todo
+    "TD001",  # todo without issue reference
     "ERA001", # commented-out code
     "FBT001", # boolean positional arg
     "FBT002", # boolean positional arg

@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from agent_control_plane.alerts.history import record_alert
-from agent_control_plane.alerts.rules import load_alert_config, get_agent_alert_rules
+from agent_control_plane.alerts.rules import get_agent_alert_rules, load_alert_config
 from agent_control_plane.inventory import get_agent
 from agent_control_plane.models import AgentStatus
 
@@ -68,6 +68,7 @@ def evaluate_alerts(agent_name: str, new_status: AgentStatus) -> list[dict[str, 
     Returns:
         List of alert dicts with keys: type, agent_name, status, message, timestamp.
         Empty list if no alert conditions are met.
+
     """
     alerts: list[dict[str, Any]] = []
     cfg = load_alert_config()
@@ -90,7 +91,7 @@ def evaluate_alerts(agent_name: str, new_status: AgentStatus) -> list[dict[str, 
     threshold = rules.get("consecutive_failures", cfg.get("global", {}).get("consecutive_failures", 3))
     rate_limit = rules.get("rate_limit_seconds", cfg.get("global", {}).get("rate_limit_seconds", 300))
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # Check for transition-based alerts
     if prev_status != new_status:
@@ -178,8 +179,55 @@ def dispatch_alerts(alerts: list[dict[str, Any]]) -> None:
             except Exception as e:
                 import logging
                 logging.getLogger(__name__).warning(
-                    "Failed to dispatch alert via %s: %s", channel_name, e
+                    "Failed to dispatch alert via %s: %s", channel_name, e,
                 )
+
+
+def dispatch_drift_alert(
+    agent_name: str,
+    drift_count: int,
+    max_severity: str,
+    details: str = "",
+) -> None:
+    """Dispatch a configuration drift alert.
+
+    Args:
+        agent_name: The agent with detected drift.
+        drift_count: Number of drifted fields.
+        max_severity: Highest severity level detected.
+        details: Human-readable details of the drift.
+
+    """
+    from agent_control_plane.alerts.rules import get_agent_alert_rules, load_alert_config
+    cfg = load_alert_config()
+    if not cfg.get("enabled", True):
+        return
+
+    rules = get_agent_alert_rules(agent_name)
+    rate_limit = rules.get("rate_limit_seconds", cfg.get("global", {}).get("rate_limit_seconds", 300))
+
+    now = datetime.now(UTC).isoformat()
+
+    alert = {
+        "type": "DRIFT",
+        "agent_name": agent_name,
+        "status": max_severity,
+        "message": f"Agent '{agent_name}' has {drift_count} config drift(s) (max: {max_severity})",
+        "timestamp": now,
+    }
+    if details:
+        alert["message"] += f" - {details}"
+
+    # Rate limit DRIFT alerts
+    if _is_rate_limited(agent_name, "DRIFT", rate_limit):
+        return
+
+    record_alert(
+        agent_name=agent_name,
+        alert_type="DRIFT",
+        status=max_severity,
+        message=alert["message"],
+    )
 
 
 def _dispatch_webhook(url: str, alert: dict[str, Any]) -> None:

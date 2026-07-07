@@ -4,22 +4,21 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
-from agent_control_plane.config import get_home
+from agent_control_plane.analytics import (
+    get_cost_timeseries,
+    get_fleet_health_timeseries,
+    get_health_timeseries,
+)
 from agent_control_plane.inventory import (
-    get_connection,
     get_agent,
+    get_connection,
     get_health_history,
     get_summary_stats,
     list_agents,
     list_cost_records,
-)
-from agent_control_plane.analytics import (
-    get_health_timeseries,
-    get_fleet_health_timeseries,
-    get_cost_timeseries,
 )
 
 
@@ -102,7 +101,7 @@ def create_app() -> FastAPI:
                     "avg_response_time_ms": round(a.avg_response_time_ms, 2),
                 }
                 for a in agents
-            ]
+            ],
         }
 
     @app.get("/api/agents/{name}/health")
@@ -167,6 +166,67 @@ def create_app() -> FastAPI:
         from agent_control_plane.alerts.history import get_alert_history
         history = get_alert_history(agent_name=agent, limit=limit)
         return {"alerts": history, "count": len(history)}
+
+    # ------------------------------------------------------------------
+    # Drift Detection API Routes (Sprint S-6)
+    # ------------------------------------------------------------------
+
+    @app.get("/api/drift/summary")
+    def api_drift_summary():
+        """Drift event summary by severity."""
+        from agent_control_plane.inventory import get_drift_summary
+        conn = _conn()
+        summary = get_drift_summary(conn)
+        conn.close()
+        return {"summary": summary}
+
+    @app.get("/api/drift")
+    def api_drift(limit: int = 50, agent: str | None = None, severity: str | None = None):
+        """Drift detection history."""
+        from agent_control_plane.inventory import get_drift_history
+        conn = _conn()
+        history = get_drift_history(conn, agent_name=agent, severity=severity, limit=limit)
+        conn.close()
+        return {
+            "drift_events": [
+                {
+                    "id": d.id,
+                    "agent_name": d.agent_name,
+                    "field_name": d.field_name,
+                    "expected": d.expected,
+                    "actual": d.actual,
+                    "severity": d.severity,
+                    "message": d.message,
+                    "detected_at": d.detected_at.isoformat(),
+                }
+                for d in history
+            ],
+            "count": len(history),
+        }
+
+    @app.get("/api/drift/{agent_name}")
+    def api_drift_agent(agent_name: str, limit: int = 50):
+        """Drift history for a specific agent."""
+        from agent_control_plane.inventory import get_drift_history
+        conn = _conn()
+        history = get_drift_history(conn, agent_name=agent_name, limit=limit)
+        conn.close()
+        return {
+            "agent_name": agent_name,
+            "drift_events": [
+                {
+                    "id": d.id,
+                    "field_name": d.field_name,
+                    "expected": d.expected,
+                    "actual": d.actual,
+                    "severity": d.severity,
+                    "message": d.message,
+                    "detected_at": d.detected_at.isoformat(),
+                }
+                for d in history
+            ],
+            "count": len(history),
+        }
 
     # ------------------------------------------------------------------
     # Analytics API Routes (Sprint S-5)

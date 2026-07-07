@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 
 from agent_control_plane.inventory import (
-    get_connection,
     get_agent,
+    get_connection,
     log_health_check,
     upsert_agent,
 )
@@ -28,6 +28,7 @@ def check_agent_health(
 
     Returns:
         Tuple of (status, response_time_ms, status_code, error_message).
+
     """
     start = time.monotonic()
     try:
@@ -69,6 +70,7 @@ def run_health_checks(
 
     Returns:
         List of (endpoint, status, response_time_ms, status_code, error) tuples.
+
     """
     results: list[tuple[AgentEndpoint, AgentStatus, float, int | None, str | None]] = []
     conn = get_connection()
@@ -87,7 +89,7 @@ def run_health_checks(
         )
 
         # Evaluate alerts
-        from agent_control_plane.alerts.engine import evaluate_alerts, dispatch_alerts
+        from agent_control_plane.alerts.engine import dispatch_alerts, evaluate_alerts
         alerts = evaluate_alerts(endpoint.name, status)
         if alerts:
             dispatch_alerts(alerts)
@@ -102,7 +104,7 @@ def run_health_checks(
                 status=status,
                 tags=existing.tags,
                 first_seen=existing.first_seen,
-                last_seen=datetime.now(timezone.utc),
+                last_seen=datetime.now(UTC),
                 total_checks=existing.total_checks + 1,
                 successful_checks=existing.successful_checks + (1 if status == AgentStatus.ONLINE else 0),
                 avg_response_time_ms=_rolling_avg(existing.avg_response_time_ms, existing.total_checks, elapsed),

@@ -17,7 +17,6 @@ class TestCLICommands:
 
     def test_version(self):
         """--version flag prints version and exits."""
-        import sys
         with pytest.raises(SystemExit):
             main(["--version"])
 
@@ -60,7 +59,6 @@ class TestCLICommands:
 
     def test_unknown_command(self):
         """Unknown command exits with non-zero status."""
-        import sys
         with pytest.raises(SystemExit) as exc:
             main(["unknown-command"])
         assert exc.value.code != 0

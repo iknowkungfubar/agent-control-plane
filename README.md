@@ -364,6 +364,63 @@ Health log records are automatically cleaned up to prevent unbounded database gr
 | `health_log_retention_days` in config.yaml | 90 | Max age in days for health check records |
 | `ACP_HEALTH_RETENTION_DAYS` env var | — | Overrides config value |
 
+## Configuration Drift Detection
+
+Agent Control Plane can detect when an agent's actual configuration diverges from its expected baseline — provider changes, version drift, tag changes, or configuration anomalies.
+
+### Managing Baselines
+
+```bash
+# Capture a baseline from a live agent (auto-detects version and config)
+acp config-baseline capture my-agent
+
+# Manually set expected values
+acp config-baseline set my-agent --provider openai --version gpt-4 --tags prod,llm
+
+# View an agent's baseline
+acp config-baseline show my-agent
+
+# List all baselines
+acp config-baseline list
+
+# Delete a baseline
+acp config-baseline delete my-agent
+```
+
+### Checking for Drift
+
+```bash
+# Check all agents for configuration drift
+acp drift-check
+# ✓ agent-1: no drift detected
+# ⚠ agent-2: 2 drift(s), max severity: high
+#   • Provider changed from 'openai' to 'anthropic'
+#   • Version changed from 'gpt-4' to 'gpt-3.5'
+
+# Check a specific agent
+acp drift-check --name my-agent
+
+# View drift history
+acp drift-report
+```
+
+### Drift Severity Levels
+
+| Severity | Meaning |
+|----------|---------|
+| **none** | Config matches baseline |
+| **low** | Minor change (version upgrade) |
+| **medium** | Notable change (tag or path change) |
+| **high** | Significant change (provider change) |
+| **critical** | Agent unreachable for verification |
+
+### How It Works
+
+1. **Baseline capture** — `acp config-baseline capture` probes the agent's health endpoint and records expected values (provider, version, tags, metadata).
+2. **Drift check** — `acp drift-check` compares current agent state against the stored baseline for each field.
+3. **Alert integration** — When drift is detected, a `DRIFT` alert fires through the configured notification channels (Slack, email, webhook).
+4. **Dashboard** — Each agent's detail page shows drift event history with severity badges.
+
 ## Development
 
 ### Setup
@@ -423,8 +480,8 @@ PYTHONPATH="" .venv/bin/python -m pytest tests/ --cov=agent_control_plane
 - [x] Automatic agent discovery (port scan + MCP detection)
 - [x] Historical trend charts (health time-series + cost trend with Canvas charts)
 - [x] Data retention (configurable health log cleanup)
+- [x] Agent configuration drift detection (baselines, drift checking, alerts, dashboard display)
 - [ ] Multi-user/team support
-- [ ] Agent configuration drift detection
 
 ## License
 

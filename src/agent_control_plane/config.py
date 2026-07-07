@@ -44,6 +44,7 @@ def load_config(path: Path | None = None) -> dict[str, Any]:
     Raises:
         FileNotFoundError: If config file does not exist.
         yaml.YAMLError: If config is invalid YAML.
+
     """
     if path is None:
         path = _resolve_config_path()
@@ -63,6 +64,7 @@ def parse_agents(cfg: dict[str, Any]) -> list[AgentEndpoint]:
 
     Returns:
         List of configured agent endpoints.
+
     """
     agents: list[AgentEndpoint] = []
     for entry in cfg.get("agents", []):
@@ -74,7 +76,7 @@ def parse_agents(cfg: dict[str, Any]) -> list[AgentEndpoint]:
                 health_check_path=entry.get("health_check_path", "/health"),
                 tags=entry.get("tags", []),
                 metadata=entry.get("metadata", {}),
-            )
+            ),
         )
     return agents
 

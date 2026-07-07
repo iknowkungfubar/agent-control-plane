@@ -13,11 +13,10 @@ import subprocess
 import sys
 import tempfile
 import time
-from datetime import datetime, timezone
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from collections.abc import Generator
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from threading import Thread
-from typing import Generator
 
 import pytest
 
@@ -124,7 +123,7 @@ def degraded_agent_server() -> Generator[int, None, None]:
     server.shutdown()
 
 
-@pytest.fixture()
+@pytest.fixture
 def temp_home() -> Generator[Path, None, None]:
     """Create a temp directory with a config file and set it as ACP_HOME."""
     with tempfile.TemporaryDirectory(prefix="acp_test_") as tmp:

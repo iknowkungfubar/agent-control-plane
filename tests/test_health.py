@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import time
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from collections.abc import Generator
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from threading import Thread
-from typing import Generator
 
 import pytest
 

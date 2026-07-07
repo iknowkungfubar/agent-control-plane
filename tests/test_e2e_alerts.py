@@ -11,10 +11,9 @@ import json
 import os
 import threading
 import time
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from collections.abc import Generator
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Generator
-from unittest.mock import patch
 
 import pytest
 import yaml
@@ -189,7 +188,7 @@ class TestAlertEngine:
         """Alert triggers a webhook POST to configured URL."""
         self._configure_webhook(webhook_server)
         self._seed_agent("agent-f", AgentStatus.ONLINE)
-        from agent_control_plane.alerts.engine import evaluate_alerts, dispatch_alerts
+        from agent_control_plane.alerts.engine import dispatch_alerts, evaluate_alerts
         # Need 2 consecutive to trigger threshold
         evaluate_alerts("agent-f", AgentStatus.OFFLINE)
         alerts = evaluate_alerts("agent-f", AgentStatus.OFFLINE)
@@ -204,7 +203,7 @@ class TestAlertEngine:
     def test_alert_history_persisted(self):
         """Dispatched alerts are stored in SQLite history."""
         self._seed_agent("agent-g", AgentStatus.ONLINE)
-        from agent_control_plane.alerts.engine import evaluate_alerts, dispatch_alerts
+        from agent_control_plane.alerts.engine import dispatch_alerts, evaluate_alerts
         from agent_control_plane.alerts.history import get_alert_history
         # Trigger alerts
         evaluate_alerts("agent-g", AgentStatus.OFFLINE)
@@ -217,7 +216,7 @@ class TestAlertEngine:
     def test_deduplication_rate_limit(self):
         """Same alert type for same agent is rate-limited."""
         self._seed_agent("agent-h", AgentStatus.ONLINE)
-        from agent_control_plane.alerts.engine import evaluate_alerts, dispatch_alerts
+        from agent_control_plane.alerts.engine import dispatch_alerts, evaluate_alerts
         from agent_control_plane.alerts.history import get_alert_history
         # Trigger first alert
         evaluate_alerts("agent-h", AgentStatus.OFFLINE)

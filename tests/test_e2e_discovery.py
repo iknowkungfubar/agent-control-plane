@@ -11,10 +11,9 @@ import os
 import socket
 import threading
 import time
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from collections.abc import Generator
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Generator
-from unittest.mock import patch
 
 import pytest
 import yaml
@@ -175,7 +174,7 @@ class TestPortScanDiscovery:
         assert result is not None
 
     def test_scan_port_range_discovers_agents(
-        self, openai_server: int, anthropic_server: int
+        self, openai_server: int, anthropic_server: int,
     ):
         """Scanning a port range discovers multiple agents."""
         from agent_control_plane.discovery.scanner import scan_ports
@@ -238,8 +237,8 @@ class TestDiscoveryCLI:
 
     def test_discover_cli_basic(self, openai_server: int):
         """CLI discover command scans and reports findings."""
+
         from agent_control_plane.cli import main
-        import sys
         rc = main(["discover", "--host", "127.0.0.1", "--ports", str(openai_server)])
         assert rc == 0
 
