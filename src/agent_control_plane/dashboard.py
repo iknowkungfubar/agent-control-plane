@@ -16,6 +16,11 @@ from agent_control_plane.inventory import (
     list_agents,
     list_cost_records,
 )
+from agent_control_plane.analytics import (
+    get_health_timeseries,
+    get_fleet_health_timeseries,
+    get_cost_timeseries,
+)
 
 
 def _read_template(name: str) -> str:
@@ -162,6 +167,38 @@ def create_app() -> FastAPI:
         from agent_control_plane.alerts.history import get_alert_history
         history = get_alert_history(agent_name=agent, limit=limit)
         return {"alerts": history, "count": len(history)}
+
+    # ------------------------------------------------------------------
+    # Analytics API Routes (Sprint S-5)
+    # ------------------------------------------------------------------
+
+    @app.get("/api/analytics/health/{agent_name}")
+    def api_analytics_health_agent(agent_name: str, bucket: str = "day", days: int = 7):
+        """Health time-series for a specific agent."""
+        conn = _conn()
+        agent = get_agent(conn, agent_name)
+        if agent is None:
+            conn.close()
+            raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
+        series = get_health_timeseries(conn, agent_name, bucket=bucket, days=days)
+        conn.close()
+        return {"agent_name": agent_name, "bucket": bucket, "series": series}
+
+    @app.get("/api/analytics/health")
+    def api_analytics_health_fleet(bucket: str = "day", days: int = 7):
+        """Fleet-level health time-series aggregated across all agents."""
+        conn = _conn()
+        series = get_fleet_health_timeseries(conn, bucket=bucket, days=days)
+        conn.close()
+        return {"bucket": bucket, "days": days, "series": series}
+
+    @app.get("/api/analytics/costs")
+    def api_analytics_costs(months: int = 6, agent: str | None = None):
+        """Cost time-series grouped by month."""
+        conn = _conn()
+        series = get_cost_timeseries(conn, months=months, agent_name=agent)
+        conn.close()
+        return {"months": months, "series": series}
 
     @app.get("/metrics")
     def prometheus_metrics():

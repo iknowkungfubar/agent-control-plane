@@ -4,6 +4,18 @@
 {% block content %}
 <h2>Agent: {{ agent_name }}</h2>
 <div class="status-bar" id="agent-info-bar"></div>
+
+<div style="display:flex;flex-wrap:wrap;gap:1rem;margin-top:1.5rem;">
+  <div class="chart-card">
+    <h4>Health Status Trend (7 days)</h4>
+    <canvas id="healthTrendChart" width="500" height="220"></canvas>
+  </div>
+  <div class="chart-card">
+    <h4>Response Time (ms)</h4>
+    <canvas id="responseTimeChart" width="500" height="220"></canvas>
+  </div>
+</div>
+
 <h3 style="margin-top:1.5rem;margin-bottom:0.75rem;">Health History</h3>
 <table>
     <thead><tr><th>Timestamp</th><th>Status</th><th>Response Time</th><th>HTTP Code</th><th>Error</th></tr></thead>
@@ -12,16 +24,255 @@
 <a href="/agents" style="display:inline-block;margin-top:1rem;">← Back to all agents</a>
 {% endblock %}
 {% block scripts %}
+<style>
+.chart-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  flex: 1;
+  min-width: 280px;
+}
+.chart-card h4 { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em; }
+canvas { display: block; width: 100% !important; height: auto !important; max-width: 500px; }
+</style>
 <script>
+// --- Canvas Chart Utilities ---
+function drawBarChart(canvas, labels, values, colors, yLabel) {
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.offsetWidth || 500;
+  const h = 220;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.scale(dpr, dpr);
+
+  const pad = { top: 20, right: 20, bottom: 40, left: 50 };
+  const cw = w - pad.left - pad.right;
+  const ch = h - pad.top - pad.bottom;
+  const maxVal = Math.max(1, ...values);
+  const barW = Math.max(4, Math.min(24, cw / labels.length - 2));
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Background grid lines
+  ctx.strokeStyle = '#2a2d3a';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (ch / 4) * i;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
+    ctx.fillStyle = '#8b8fa3'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText(Math.round(maxVal - (maxVal / 4) * i).toString(), pad.left - 6, y + 3);
+  }
+
+  // Y-axis label
+  if (yLabel) {
+    ctx.save();
+    ctx.fillStyle = '#8b8fa3'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+    ctx.translate(12, pad.top + ch / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText(yLabel, 0, 0);
+    ctx.restore();
+  }
+
+  // Bars
+  for (let i = 0; i < labels.length; i++) {
+    const x = pad.left + (cw / labels.length) * i + (cw / labels.length - barW) / 2;
+    const barH = (values[i] / maxVal) * ch;
+    const y = pad.top + ch - barH;
+
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.fillRect(x, y, barW, barH);
+
+    // X-axis label (show every 4th or all if few)
+    if (labels.length <= 14 || i % Math.ceil(labels.length / 10) === 0) {
+      ctx.fillStyle = '#8b8fa3'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+      const label = labels[i].length > 8 ? labels[i].slice(-5) : labels[i];
+      ctx.fillText(label, x + barW / 2, pad.top + ch + 16);
+    }
+  }
+}
+
+function drawStackedBarChart(canvas, labels, series, colors, yLabel) {
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.offsetWidth || 500;
+  const h = 220;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.scale(dpr, dpr);
+
+  const pad = { top: 20, right: 60, bottom: 40, left: 50 };
+  const cw = w - pad.left - pad.right;
+  const ch = h - pad.top - pad.bottom;
+  const maxTotal = Math.max(1, ...series[0].values.map((_, i) =>
+    series.reduce((sum, s) => sum + (s.values[i] || 0), 0)
+  ));
+  const barW = Math.max(4, Math.min(20, cw / labels.length - 2));
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Grid
+  ctx.strokeStyle = '#2a2d3a';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (ch / 4) * i;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
+    ctx.fillStyle = '#8b8fa3'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText(Math.round(maxTotal - (maxTotal / 4) * i).toString(), pad.left - 6, y + 3);
+  }
+
+  // Y-axis label
+  if (yLabel) {
+    ctx.save();
+    ctx.fillStyle = '#8b8fa3'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+    ctx.translate(12, pad.top + ch / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText(yLabel, 0, 0);
+    ctx.restore();
+  }
+
+  // Stacked bars
+  for (let i = 0; i < labels.length; i++) {
+    let yOffset = 0;
+    for (let s = 0; s < series.length; s++) {
+      const val = series[s].values[i] || 0;
+      if (val === 0) continue;
+      const barH = (val / maxTotal) * ch;
+      const x = pad.left + (cw / labels.length) * i + (cw / labels.length - barW) / 2;
+      const y = pad.top + ch - yOffset - barH;
+
+      ctx.fillStyle = colors[s % colors.length];
+      ctx.fillRect(x, y, barW, barH + 1); // +1 to avoid gaps between stacked segments
+      yOffset += barH;
+    }
+
+    // X-axis label
+    if (labels.length <= 14 || i % Math.ceil(labels.length / 10) === 0) {
+      ctx.fillStyle = '#8b8fa3'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+      const label = labels[i].length > 8 ? labels[i].slice(-5) : labels[i];
+      ctx.fillText(label, x + barW / 2, pad.top + ch + 16);
+    }
+  }
+
+  // Legend
+  let lx = pad.left;
+  const ly = h - 4;
+  for (let s = 0; s < series.length; s++) {
+    ctx.fillStyle = colors[s % colors.length];
+    ctx.fillRect(lx, ly - 8, 10, 10);
+    ctx.fillStyle = '#e1e4ed'; ctx.font = '9px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText(series[s].label, lx + 14, ly);
+    lx += ctx.measureText(series[s].label).width + 30;
+  }
+}
+
+function drawLineChart(canvas, labels, values, color, yLabel) {
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.offsetWidth || 500;
+  const h = 220;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.scale(dpr, dpr);
+
+  const pad = { top: 20, right: 20, bottom: 40, left: 50 };
+  const cw = w - pad.left - pad.right;
+  const ch = h - pad.top - pad.bottom;
+  const maxVal = Math.max(1, ...values);
+  const minVal = Math.min(0, ...values);
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Grid
+  ctx.strokeStyle = '#2a2d3a';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (ch / 4) * i;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
+    ctx.fillStyle = '#8b8fa3'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
+    const val = Math.round(maxVal - (maxVal / 4) * i);
+    ctx.fillText(val.toString(), pad.left - 6, y + 3);
+  }
+
+  // Y-axis label
+  if (yLabel) {
+    ctx.save();
+    ctx.fillStyle = '#8b8fa3'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+    ctx.translate(12, pad.top + ch / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText(yLabel, 0, 0);
+    ctx.restore();
+  }
+
+  // Line
+  if (values.length < 2) return;
+  const xStep = cw / (values.length - 1);
+
+  // Area fill
+  ctx.beginPath();
+  ctx.moveTo(pad.left, pad.top + ch);
+  for (let i = 0; i < values.length; i++) {
+    const x = pad.left + i * xStep;
+    const y = pad.top + ch - ((values[i] - minVal) / (maxVal - minVal || 1)) * ch;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(pad.left + (values.length - 1) * xStep, pad.top + ch);
+  ctx.closePath();
+  ctx.fillStyle = color + '20'; // 12% opacity
+  ctx.fill();
+
+  // Line stroke
+  ctx.beginPath();
+  for (let i = 0; i < values.length; i++) {
+    const x = pad.left + i * xStep;
+    const y = pad.top + ch - ((values[i] - minVal) / (maxVal - minVal || 1)) * ch;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Dots
+  for (let i = 0; i < values.length; i++) {
+    const x = pad.left + i * xStep;
+    const y = pad.top + ch - ((values[i] - minVal) / (maxVal - minVal || 1)) * ch;
+    ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+  }
+
+  // X-axis labels
+  if (labels.length <= 14) {
+    for (let i = 0; i < labels.length; i++) {
+      if (labels.length > 8 && i % 2 !== 0) continue;
+      const x = pad.left + i * xStep;
+      ctx.fillStyle = '#8b8fa3'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+      const label = labels[i].length > 8 ? labels[i].slice(-5) : labels[i];
+      ctx.fillText(label, x, pad.top + ch + 16);
+    }
+  }
+}
+
+// --- Load Agent Detail + Charts ---
 async function loadAgentDetail() {
     try {
-        const [agentsRes, healthRes] = await Promise.all([
+        const agentName = '{{ agent_name }}';
+        const [agentsRes, healthRes, analyticsRes] = await Promise.all([
             fetch('/api/agents'),
-            fetch(`/api/agents/${encodeURIComponent('{{ agent_name }}')}/health`)
+            fetch(`/api/agents/${encodeURIComponent(agentName)}/health`),
+            fetch(`/api/analytics/health/${encodeURIComponent(agentName)}?bucket=day&days=7`)
         ]);
         const agents = await agentsRes.json();
         const health = await healthRes.json();
-        const agent = agents.agents.find(a => a.name === '{{ agent_name }}');
+        const analytics = await analyticsRes.json();
+
+        const agent = agents.agents.find(a => a.name === agentName);
 
         const bar = document.getElementById('agent-info-bar');
         if (agent) {
@@ -31,6 +282,36 @@ async function loadAgentDetail() {
                 <div class="status-card"><div class="count">${agent.avg_response_time_ms > 0 ? agent.avg_response_time_ms + 'ms' : '—'}</div><div class="label">Avg Response</div></div>
                 <div class="status-card"><div class="count">${agent.successful_checks}/${agent.total_checks}</div><div class="label">Checks</div></div>
             `;
+        }
+
+        // Health status trend chart (stacked bar)
+        const series = analytics.series || [];
+        if (series.length > 0 && document.getElementById('healthTrendChart')) {
+            const labels = series.map(s => s.bucket);
+            drawStackedBarChart(
+                document.getElementById('healthTrendChart'),
+                labels,
+                [
+                    { label: 'Online', values: series.map(s => s.online) },
+                    { label: 'Offline', values: series.map(s => s.offline) },
+                    { label: 'Degraded', values: series.map(s => s.degraded) },
+                ],
+                ['#34d399', '#f87171', '#fbbf24'],
+                'Check Count'
+            );
+        }
+
+        // Response time chart (line)
+        if (series.length > 0 && document.getElementById('responseTimeChart')) {
+            const labels = series.map(s => s.bucket);
+            const avgVals = series.map(s => s.avg_response_ms || 0);
+            drawLineChart(
+                document.getElementById('responseTimeChart'),
+                labels,
+                avgVals,
+                '#60a5fa',
+                'Response (ms)'
+            );
         }
 
         const tbody = document.getElementById('health-table-body');

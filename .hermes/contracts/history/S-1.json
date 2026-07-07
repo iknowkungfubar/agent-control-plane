@@ -1,0 +1,37 @@
+{
+  "sprint": "S-1",
+  "feature": "Agent Control Plane Web UI Dashboard",
+  "behaviors": [],
+  "success_criteria": [
+    "FastAPI backend serves REST API for agents, health, costs, and export data",
+    "Dashboard index page shows fleet status summary with online/offline/degraded counts",
+    "Agent list page displays all agents with name, provider, status, response time, and last-seen",
+    "Cost breakdown page shows per-agent monthly costs with totals in a table",
+    "Export endpoint downloads current inventory as JSON file",
+    "Dashboard auto-refreshes every 30 seconds",
+    "Single command starts both API and static file server: acp dashboard",
+    "Responsive HTML pages with minimal CSS that work on desktop and tablet",
+    "At least 70% test coverage on all API route handlers",
+    "README updated with dashboard setup, screenshots section, and dev instructions"
+  ],
+  "e2e_test_paths": [
+    "tests/test_e2e_*.py",
+    "tests/test_e2e*.py"
+  ],
+  "status": "closed",
+  "proposed_by": "generator",
+  "evaluator_accepted": true,
+  "failed_criteria": [
+    "Dashboard built and shipped"
+  ],
+  "created_at": "2026-07-07T02:41:47.389079+00:00",
+  "updated_at": "2026-07-07T04:49:36.813309+00:00",
+  "amendments": [],
+  "history": [
+    {
+      "event": "proposed",
+      "note": "Proposed by generator: Agent Control Plane Web UI Dashboard",
+      "at": "2026-07-07T02:41:47.389339+00:00"
+    }
+  ]
+}

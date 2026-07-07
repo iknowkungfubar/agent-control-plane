@@ -3,7 +3,7 @@
 **AI Agent Operations Platform** — discover, inventory, monitor, and track costs for AI agents across your organization.
 
 [![Tests](https://github.com/iknowkungfubar/agent-control-plane/actions/workflows/ci.yml/badge.svg)](https://github.com/iknowkungfubar/agent-control-plane/actions)
-[![Coverage](https://img.shields.io/badge/coverage-90%25-brightgreen)](https://github.com/iknowkungfubar/agent-control-plane)
+[![Coverage](https://img.shields.io/badge/coverage-80%25-yellowgreen)](https://github.com/iknowkungfubar/agent-control-plane)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
@@ -322,10 +322,10 @@ Then open http://localhost:8337 in your browser.
 
 | Page | Route | Description |
 |------|-------|-------------|
-| Fleet Status | `/` | Summary cards (total/online/offline/degraded) + recent agents table |
+| Fleet Status | `/` | Summary cards + fleet health trend chart + recent agents table |
 | Agents | `/agents` | Full agent list with status, response time, tags |
-| Agent Detail | `/agents/{name}` | Per-agent info + health history timeline |
-| Costs | `/costs` | Monthly cost breakdown per agent with totals |
+| Agent Detail | `/agents/{name}` | Per-agent info + health status stacked chart + response time trend |
+| Costs | `/costs` | Monthly cost breakdown + cost trend bar chart |
 
 ### API Endpoints
 
@@ -338,8 +338,31 @@ The dashboard server also exposes a REST API:
 | `GET /api/agents/{name}/health` | Health check history for one agent |
 | `GET /api/costs` | Per-agent cost breakdown |
 | `GET /api/export` | Full inventory as JSON download |
+| `GET /api/alerts?limit=N&agent=X` | Alert history (optionally filtered by agent) |
+| `GET /api/analytics/health` | Fleet health time-series (hour/day/week buckets) |
+| `GET /api/analytics/health/{name}` | Per-agent health time-series |
+| `GET /api/analytics/costs?months=N&agent=X` | Cost time-series by month |
 
 All endpoints return JSON and are suitable for integration with monitoring tools.
+
+### Historical Trend Charts
+
+The dashboard includes Canvas-based (zero-dependency) trend charts:
+
+- **Fleet Status page** — stacked bar chart showing online/offline/degraded distribution over 7 days + average response time line chart
+- **Agent Detail page** — per-agent stacked health trend + response time trend
+- **Costs page** — monthly cost history bar chart
+
+Charts render with device pixel ratio support, dark-theme styling, and auto-refresh alongside dashboard data.
+
+### Data Retention
+
+Health log records are automatically cleaned up to prevent unbounded database growth:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `health_log_retention_days` in config.yaml | 90 | Max age in days for health check records |
+| `ACP_HEALTH_RETENTION_DAYS` env var | — | Overrides config value |
 
 ## Development
 
@@ -398,9 +421,9 @@ PYTHONPATH="" .venv/bin/python -m pytest tests/ --cov=agent_control_plane
 - [x] Prometheus metrics endpoint
 - [x] Slack/email/webhook alerts on agent status changes
 - [x] Automatic agent discovery (port scan + MCP detection)
-- [ ] Historical trend charts
+- [x] Historical trend charts (health time-series + cost trend with Canvas charts)
+- [x] Data retention (configurable health log cleanup)
 - [ ] Multi-user/team support
-- [ ] Prometheus metrics endpoint
 - [ ] Agent configuration drift detection
 
 ## License

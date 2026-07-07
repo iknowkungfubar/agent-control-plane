@@ -11,27 +11,207 @@
     <div class="status-card"><div class="count" style="color:var(--accent)" id="stat-cost">—</div><div class="label">Est. Monthly Cost</div></div>
 </div>
 
-<h2 style="margin-top:2rem;">Recent Agents</h2>
+<div style="display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem;">
+  <div class="chart-card">
+    <h4>Fleet Health Trend (7 days)</h4>
+    <canvas id="fleetHealthChart" width="500" height="200"></canvas>
+  </div>
+  <div class="chart-card">
+    <h4>Average Response Time</h4>
+    <canvas id="fleetResponseChart" width="500" height="200"></canvas>
+  </div>
+</div>
+
+<h2 style="margin-top:1rem;">Recent Agents</h2>
 <table>
     <thead><tr><th>Agent</th><th>Provider</th><th>Status</th><th>Response</th><th>Checks</th><th>Last Seen</th></tr></thead>
     <tbody id="agent-table-body"><tr><td colspan="6" class="loading">Loading...</td></tr></tbody>
 </table>
 {% endblock %}
 {% block scripts %}
+<style>
+.chart-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  flex: 1;
+  min-width: 280px;
+}
+.chart-card h4 { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em; }
+canvas { display: block; width: 100% !important; height: auto !important; }
+</style>
 <script>
+function drawStackedBarChart(canvas, labels, series, colors, yLabel) {
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.offsetWidth || 500;
+  const h = 200;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.scale(dpr, dpr);
+
+  const pad = { top: 20, right: 60, bottom: 35, left: 40 };
+  const cw = w - pad.left - pad.right;
+  const ch = h - pad.top - pad.bottom;
+  const maxTotal = Math.max(1, ...series[0].values.map((_, i) =>
+    series.reduce((sum, s) => sum + (s.values[i] || 0), 0)
+  ));
+  const barW = Math.max(4, Math.min(18, cw / labels.length - 2));
+
+  ctx.clearRect(0, 0, w, h);
+
+  ctx.strokeStyle = '#2a2d3a';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 3; i++) {
+    const y = pad.top + (ch / 3) * i;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
+    ctx.fillStyle = '#8b8fa3'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText(Math.round(maxTotal - (maxTotal / 3) * i).toString(), pad.left - 5, y + 3);
+  }
+
+  for (let i = 0; i < labels.length; i++) {
+    let yOffset = 0;
+    for (let s = 0; s < series.length; s++) {
+      const val = series[s].values[i] || 0;
+      if (val === 0) continue;
+      const barH = (val / maxTotal) * ch;
+      const x = pad.left + (cw / labels.length) * i + (cw / labels.length - barW) / 2;
+      const y = pad.top + ch - yOffset - barH;
+      ctx.fillStyle = colors[s % colors.length];
+      ctx.fillRect(x, y, barW, barH + 1);
+      yOffset += barH;
+    }
+    if (labels.length <= 7 || i % 2 === 0) {
+      ctx.fillStyle = '#8b8fa3'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(labels[i], pad.left + (cw / labels.length) * i + (cw / labels.length) / 2, pad.top + ch + 14);
+    }
+  }
+
+  let lx = pad.left;
+  const ly = h - 2;
+  for (let s = 0; s < series.length; s++) {
+    ctx.fillStyle = colors[s % colors.length];
+    ctx.fillRect(lx, ly - 8, 10, 10);
+    ctx.fillStyle = '#e1e4ed'; ctx.font = '9px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText(series[s].label, lx + 14, ly);
+    lx += ctx.measureText(series[s].label).width + 24;
+  }
+}
+
+function drawLineChart(canvas, labels, values, color, yLabel) {
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.offsetWidth || 500;
+  const h = 200;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.scale(dpr, dpr);
+
+  const pad = { top: 20, right: 20, bottom: 35, left: 40 };
+  const cw = w - pad.left - pad.right;
+  const ch = h - pad.top - pad.bottom;
+  const maxVal = Math.max(1, ...values);
+
+  ctx.clearRect(0, 0, w, h);
+
+  ctx.strokeStyle = '#2a2d3a';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 3; i++) {
+    const y = pad.top + (ch / 3) * i;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
+    ctx.fillStyle = '#8b8fa3'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText(Math.round(maxVal - (maxVal / 3) * i).toString(), pad.left - 5, y + 3);
+  }
+
+  if (values.length < 2) return;
+  const xStep = cw / (values.length - 1);
+
+  ctx.beginPath();
+  ctx.moveTo(pad.left, pad.top + ch);
+  for (let i = 0; i < values.length; i++) {
+    const x = pad.left + i * xStep;
+    const y = pad.top + ch - (values[i] / maxVal) * ch;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(pad.left + (values.length - 1) * xStep, pad.top + ch);
+  ctx.closePath();
+  ctx.fillStyle = color + '20';
+  ctx.fill();
+
+  ctx.beginPath();
+  for (let i = 0; i < values.length; i++) {
+    const x = pad.left + i * xStep;
+    const y = pad.top + ch - (values[i] / maxVal) * ch;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  for (let i = 0; i < values.length; i++) {
+    const x = pad.left + i * xStep;
+    const y = pad.top + ch - (values[i] / maxVal) * ch;
+    ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+  }
+
+  if (labels.length <= 7 || labels.length <= 14) {
+    const step = labels.length > 14 ? 2 : 1;
+    for (let i = 0; i < labels.length; i += step) {
+      const x = pad.left + i * xStep;
+      ctx.fillStyle = '#8b8fa3'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(labels[i], x, pad.top + ch + 14);
+    }
+  }
+}
+
 async function loadDashboard() {
     try {
-        const [statusRes, agentsRes] = await Promise.all([
-            fetch('/api/status'), fetch('/api/agents')
+        const [statusRes, agentsRes, analyticsRes] = await Promise.all([
+            fetch('/api/status'),
+            fetch('/api/agents'),
+            fetch('/api/analytics/health?bucket=day&days=7')
         ]);
         const status = await statusRes.json();
         const agents = await agentsRes.json();
+        const analytics = await analyticsRes.json();
 
         document.getElementById('stat-total').textContent = status.total_agents;
         document.getElementById('stat-online').textContent = status.online;
         document.getElementById('stat-offline').textContent = status.offline;
         document.getElementById('stat-degraded').textContent = status.degraded;
         document.getElementById('stat-cost').textContent = '$' + (status.total_estimated_cost_monthly_usd || 0).toFixed(2);
+
+        // Fleet health chart
+        const series = analytics.series || [];
+        if (series.length > 0) {
+            const labels = series.map(s => s.bucket);
+            drawStackedBarChart(
+                document.getElementById('fleetHealthChart'),
+                labels,
+                [
+                    { label: 'Online', values: series.map(s => s.online) },
+                    { label: 'Offline', values: series.map(s => s.offline) },
+                    { label: 'Degraded', values: series.map(s => s.degraded) },
+                ],
+                ['#34d399', '#f87171', '#fbbf24'],
+                'Check Count'
+            );
+
+            // Response time chart
+            drawLineChart(
+                document.getElementById('fleetResponseChart'),
+                labels,
+                series.map(s => s.avg_response_ms || 0),
+                '#60a5fa',
+                'Response (ms)'
+            );
+        }
 
         const tbody = document.getElementById('agent-table-body');
         if (agents.agents.length === 0) {

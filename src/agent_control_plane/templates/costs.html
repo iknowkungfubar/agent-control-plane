@@ -4,23 +4,109 @@
 {% block content %}
 <h2>Cost Breakdown</h2>
 <div id="cost-summary" style="margin-bottom:1.5rem;"></div>
+
+<div class="chart-card" style="margin-bottom:1.5rem;max-width:600px;">
+  <h4>Monthly Cost Trend</h4>
+  <canvas id="costTrendChart" width="500" height="220"></canvas>
+</div>
+
 <table>
     <thead><tr><th>Agent</th><th>Month</th><th>Tokens In</th><th>Tokens Out</th><th>Est. Cost</th></tr></thead>
     <tbody id="cost-table-body"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody>
 </table>
 {% endblock %}
 {% block scripts %}
+<style>
+.chart-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+.chart-card h4 { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em; }
+canvas { display: block; width: 100% !important; height: auto !important; }
+</style>
 <script>
+function drawBarChart(canvas, labels, values, colors, yLabel) {
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.offsetWidth || 500;
+  const h = 220;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.scale(dpr, dpr);
+
+  const pad = { top: 20, right: 20, bottom: 40, left: 55 };
+  const cw = w - pad.left - pad.right;
+  const ch = h - pad.top - pad.bottom;
+  const maxVal = Math.max(1, ...values);
+  const barW = Math.max(4, Math.min(30, cw / labels.length - 4));
+
+  ctx.clearRect(0, 0, w, h);
+
+  ctx.strokeStyle = '#2a2d3a';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (ch / 4) * i;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
+    ctx.fillStyle = '#8b8fa3'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText('$' + (maxVal - (maxVal / 4) * i).toFixed(0), pad.left - 6, y + 3);
+  }
+
+  if (yLabel) {
+    ctx.save();
+    ctx.fillStyle = '#8b8fa3'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+    ctx.translate(14, pad.top + ch / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText(yLabel, 0, 0);
+    ctx.restore();
+  }
+
+  for (let i = 0; i < labels.length; i++) {
+    const x = pad.left + (cw / labels.length) * i + (cw / labels.length - barW) / 2;
+    const barH = (values[i] / maxVal) * ch;
+    const y = pad.top + ch - barH;
+
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.fillRect(x, y, barW, barH);
+
+    ctx.fillStyle = '#8b8fa3'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(labels[i], x + barW / 2, pad.top + ch + 16);
+  }
+}
+
 async function loadCosts() {
     try {
-        const res = await fetch('/api/costs');
-        const data = await res.json();
+        const [costRes, analyticsRes] = await Promise.all([
+            fetch('/api/costs'),
+            fetch('/api/analytics/costs?months=12')
+        ]);
+        const data = await costRes.json();
+        const analytics = await analyticsRes.json();
+
         document.getElementById('cost-summary').innerHTML = `
             <div class="status-card" style="max-width:300px;">
                 <div class="count" style="color:var(--accent)">$${data.total_monthly_cost.toFixed(2)}</div>
                 <div class="label">Total Estimated Monthly Cost</div>
             </div>
         `;
+
+        // Cost trend chart
+        const series = analytics.series || [];
+        if (series.length > 0 && document.getElementById('costTrendChart')) {
+            const labels = series.map(s => s.month);
+            const values = series.map(s => s.total_cost);
+            drawBarChart(
+                document.getElementById('costTrendChart'),
+                labels,
+                values,
+                labels.map(() => '#6366f1'),
+                'Cost (USD)'
+            );
+        }
+
         const tbody = document.getElementById('cost-table-body');
         if (!data.costs || data.costs.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" class="empty">No cost data. Record costs via API or <code>acp</code> CLI.</td></tr>';

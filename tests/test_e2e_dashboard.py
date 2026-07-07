@@ -173,3 +173,110 @@ class TestDashboardE2E:
         """Dashboard returns valid responses."""
         resp = app_client.get("/api/status")
         assert resp.status_code == 200
+
+    # ------------------------------------------------------------------
+    # Analytics API E2E tests (Sprint S-5)
+    # ------------------------------------------------------------------
+
+    def test_api_analytics_health_fleet(self, app_client: TestClient):
+        """GET /api/analytics/health returns fleet health time-series."""
+        resp = app_client.get("/api/analytics/health?bucket=day&days=7")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "bucket" in data
+        assert "days" in data
+        assert "series" in data
+        assert data["bucket"] == "day"
+
+    def test_api_analytics_health_agent(self, app_client: TestClient):
+        """GET /api/analytics/health/{name} returns per-agent time-series."""
+        resp = app_client.get("/api/analytics/health/agent-alpha?bucket=day&days=7")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["agent_name"] == "agent-alpha"
+        assert "bucket" in data
+        assert "series" in data
+        # Series may be empty if no health checks performed yet
+        assert isinstance(data["series"], list)
+
+    def test_api_analytics_health_agent_not_found(self, app_client: TestClient):
+        """GET /api/analytics/health/nonexistent returns 404."""
+        resp = app_client.get("/api/analytics/health/ghost-agent")
+        assert resp.status_code == 404
+
+    def test_api_analytics_costs(self, app_client: TestClient):
+        """GET /api/analytics/costs returns cost time-series."""
+        resp = app_client.get("/api/analytics/costs?months=6")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "months" in data
+        assert "series" in data
+
+    def test_api_analytics_costs_per_agent(self, app_client: TestClient):
+        """GET /api/analytics/costs?agent=X filters to one agent."""
+        resp = app_client.get("/api/analytics/costs?months=6&agent=agent-alpha")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "series" in data
+
+    def test_api_analytics_health_bucket_parameter(self, app_client: TestClient):
+        """Bucket parameter accepts hour/day/week with defaults."""
+        # Default bucket
+        resp = app_client.get("/api/analytics/health?days=1")
+        assert resp.status_code == 200
+
+        # Hour bucket
+        resp = app_client.get("/api/analytics/health?bucket=hour&days=1")
+        assert resp.status_code == 200
+
+        # Week bucket
+        resp = app_client.get("/api/analytics/health?bucket=week&days=14")
+        assert resp.status_code == 200
+
+    def test_api_analytics_health_with_data(self):
+        """Analytics endpoint returns data when health checks exist."""
+        with tempfile.TemporaryDirectory() as tmp:
+            old_home = os.environ.get("ACP_HOME")
+            os.environ["ACP_HOME"] = tmp
+
+            from agent_control_plane.dashboard import create_app
+            from agent_control_plane.inventory import get_connection, log_health_check, upsert_agent
+            from agent_control_plane.models import AgentRecord, AgentStatus
+            from datetime import datetime, timezone
+
+            # Set up agent + health data
+            conn = get_connection()
+            upsert_agent(conn, AgentRecord(
+                name="test-a", url="http://localhost:1", provider="custom",
+            ))
+            now = datetime.now(timezone.utc)
+            for i in range(24):
+                ts = now.replace(hour=i % 24, minute=0) - __import__('datetime').timedelta(hours=i)
+                log_health_check(conn, "test-a", AgentStatus.ONLINE, 100.0, 200, timestamp=ts)
+            conn.close()
+
+            app = create_app()
+            from starlette.testclient import TestClient
+            client = TestClient(app)
+
+            # Fleet health
+            resp = client.get("/api/analytics/health?bucket=day&days=3")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert len(data["series"]) > 0
+            entry = data["series"][0]
+            assert "online" in entry
+            assert "count" in entry
+
+            # Per-agent health
+            resp = client.get("/api/analytics/health/test-a?bucket=day&days=3")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert len(data["series"]) > 0
+            assert data["agent_name"] == "test-a"
+            assert data["series"][0]["online"] > 0
+
+            client.close()
+            del os.environ["ACP_HOME"]
+            if old_home:
+                os.environ["ACP_HOME"] = old_home
