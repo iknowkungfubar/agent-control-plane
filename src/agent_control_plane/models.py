@@ -74,6 +74,7 @@ class AgentRecord:
     total_checks: int = 0
     successful_checks: int = 0
     avg_response_time_ms: float = 0.0
+    team_id: str | None = None
 
 
 @dataclass
@@ -86,6 +87,45 @@ class CostRecord:
     estimated_tokens_out: int = 0
     estimated_cost_usd: float = 0.0
     last_updated: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+class UserRole(str, Enum):
+    """Role for a user in the system."""
+
+    ADMIN = "admin"
+    OPERATOR = "operator"
+    VIEWER = "viewer"
+
+
+@dataclass
+class User:
+    """A user of the ACP system."""
+
+    name: str
+    email: str
+    role: UserRole = UserRole.VIEWER
+    api_key_hash: str = ""
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    last_seen: datetime | None = None
+
+
+@dataclass
+class Team:
+    """A team that groups agents and users."""
+
+    id: str  # short unique id
+    name: str
+    description: str = ""
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+@dataclass
+class TeamMember:
+    """Membership of a user in a team with a role."""
+
+    user_name: str
+    team_id: str
+    role_in_team: UserRole = UserRole.VIEWER
 
 
 @dataclass

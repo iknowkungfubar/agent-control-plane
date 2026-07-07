@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from rich.console import Console
@@ -127,6 +128,52 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # drift-report
     sub.add_parser("drift-report", help="Show drift detection history")
+
+    # user commands
+    user_p = sub.add_parser("user", help="Manage users")
+    user_sub = user_p.add_subparsers(dest="user_command", help="User sub-command")
+
+    user_create = user_sub.add_parser("create", help="Create a new user")
+    user_create.add_argument("name", type=str, help="User name")
+    user_create.add_argument("--email", type=str, required=True, help="Email address")
+    user_create.add_argument("--role", type=str, default="viewer",
+                             choices=["admin", "operator", "viewer"], help="User role")
+
+    user_sub.add_parser("list", help="List all users")
+
+    user_del = user_sub.add_parser("delete", help="Delete a user")
+    user_del.add_argument("name", type=str, help="User name to delete")
+
+    # team commands
+    team_p = sub.add_parser("team", help="Manage teams")
+    team_sub = team_p.add_subparsers(dest="team_command", help="Team sub-command")
+
+    team_create = team_sub.add_parser("create", help="Create a new team")
+    team_create.add_argument("id", type=str, help="Short unique team ID")
+    team_create.add_argument("--name", type=str, default=None, help="Display name (defaults to ID)")
+    team_create.add_argument("--desc", type=str, default="", help="Description")
+
+    team_sub.add_parser("list", help="List all teams")
+
+    team_del = team_sub.add_parser("delete", help="Delete a team")
+    team_del.add_argument("id", type=str, help="Team ID")
+
+    team_add_member = team_sub.add_parser("add-member", help="Add a user to a team")
+    team_add_member.add_argument("team", type=str, help="Team ID")
+    team_add_member.add_argument("--user", type=str, required=True, help="User name")
+    team_add_member.add_argument("--role", type=str, default="viewer",
+                                 choices=["admin", "operator", "viewer"], help="Role in team")
+
+    team_rm_member = team_sub.add_parser("remove-member", help="Remove a user from a team")
+    team_rm_member.add_argument("team", type=str, help="Team ID")
+    team_rm_member.add_argument("--user", type=str, required=True, help="User name")
+
+    team_add_agent = team_sub.add_parser("add-agent", help="Assign an agent to a team")
+    team_add_agent.add_argument("team", type=str, help="Team ID")
+    team_add_agent.add_argument("--agent", type=str, required=True, help="Agent name")
+
+    team_rm_agent = team_sub.add_parser("remove-agent", help="Remove an agent from a team")
+    team_rm_agent.add_argument("--agent", type=str, required=True, help="Agent name")
 
     return parser
 
@@ -570,6 +617,140 @@ def cmd_drift_report() -> None:
     console.print(table)
 
 
+# ---------------------------------------------------------------------------
+# User commands
+# ---------------------------------------------------------------------------
+
+
+def cmd_user(args: argparse.Namespace) -> None:
+    """Dispatch user subcommands."""
+    from agent_control_plane.auth import create_user_with_key
+    from agent_control_plane.inventory import delete_user, list_users
+
+    if args.user_command == "create":
+        user, api_key = create_user_with_key(
+            name=args.name,
+            email=args.email,
+            role=args.role,
+        )
+        console.print(f"[green]✓[/green] User [bold]{user.name}[/bold] created ([cyan]{user.role.value}[/cyan])")
+        console.print(f"\n  API Key: [bold yellow]{api_key}[/bold yellow]")
+        console.print("  [dim]Save this key — it will not be shown again.[/dim]")
+
+    elif args.user_command == "list":
+        conn = get_connection()
+        users = list_users(conn)
+        conn.close()
+        if not users:
+            console.print("[yellow]No users configured. Single-user mode active.[/yellow]")
+            return
+        table = Table(title="Users")
+        table.add_column("Name", style="cyan")
+        table.add_column("Email")
+        table.add_column("Role")
+        table.add_column("Created")
+        for u in users:
+            table.add_row(u.name, u.email, u.role.value,
+                          u.created_at.strftime("%Y-%m-%d"))
+        console.print(table)
+
+    elif args.user_command == "delete":
+        conn = get_connection()
+        delete_user(conn, args.name)
+        conn.close()
+        console.print(f"[green]✓[/green] User [bold]{args.name}[/bold] deleted")
+
+    else:
+        console.print("[yellow]Unknown user subcommand[/yellow]")
+
+
+# ---------------------------------------------------------------------------
+# Team commands
+# ---------------------------------------------------------------------------
+
+
+def cmd_team(args: argparse.Namespace) -> None:
+    """Dispatch team subcommands."""
+    from agent_control_plane.inventory import (
+        add_team_member,
+        assign_agent_to_team,
+        delete_team,
+        list_team_members,
+        list_teams,
+        remove_team_member,
+        unassign_agent_from_team,
+        upsert_team,
+    )
+    from agent_control_plane.models import Team, TeamMember
+
+    if args.team_command == "create":
+        team_id = args.id
+        team_name = args.name if args.name else args.id
+        now = datetime.now(timezone.utc)
+        team = Team(id=team_id, name=team_name, description=args.desc, created_at=now)
+        conn = get_connection()
+        upsert_team(conn, team)
+        conn.close()
+        console.print(f"[green]✓[/green] Team [bold]{team_name}[/bold] created (ID: {team_id})")
+
+    elif args.team_command == "list":
+        conn = get_connection()
+        teams = list_teams(conn)
+        conn.close()
+        if not teams:
+            console.print("[yellow]No teams created yet[/yellow]")
+            return
+        table = Table(title="Teams")
+        table.add_column("ID", style="cyan")
+        table.add_column("Name")
+        table.add_column("Description")
+        table.add_column("Members", justify="right")
+        for t in teams:
+            conn2 = get_connection()
+            members = list_team_members(conn2, t.id)
+            conn2.close()
+            table.add_row(t.id, t.name, t.description, str(len(members)))
+        console.print(table)
+
+    elif args.team_command == "delete":
+        conn = get_connection()
+        delete_team(conn, args.id)
+        conn.close()
+        console.print(f"[green]✓[/green] Team [bold]{args.id}[/bold] deleted")
+
+    elif args.team_command == "add-member":
+        member = TeamMember(
+            user_name=args.user,
+            team_id=args.team,
+            role_in_team=args.role,
+        )
+        conn = get_connection()
+        add_team_member(conn, member)
+        conn.close()
+        console.print(f"[green]✓[/green] User [bold]{args.user}[/bold] added to team [bold]{args.team}[/bold] as {args.role}")
+
+    elif args.team_command == "remove-member":
+        conn = get_connection()
+        remove_team_member(conn, args.user, args.team)
+        conn.close()
+        console.print(f"[green]✓[/green] User [bold]{args.user}[/bold] removed from team [bold]{args.team}[/bold]")
+
+    elif args.team_command == "add-agent":
+        conn = get_connection()
+        assign_agent_to_team(conn, args.agent, args.team)
+        conn.close()
+        console.print(f"[green]✓[/green] Agent [bold]{args.agent}[/bold] assigned to team [bold]{args.team}[/bold]")
+
+    elif args.team_command == "remove-agent":
+        conn = get_connection()
+        unassign_agent_from_team(conn, args.agent)
+        conn.close()
+        console.print(f"[green]✓[/green] Agent [bold]{args.agent}[/bold] unassigned from team")
+
+    else:
+        console.print("[yellow]Unknown team subcommand[/yellow]")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
     parser = _build_parser()
@@ -607,6 +788,10 @@ def main(argv: list[str] | None = None) -> int:
             cmd_drift_check(name=args.name, timeout=args.timeout)
         elif args.command == "drift-report":
             cmd_drift_report()
+        elif args.command == "user":
+            cmd_user(args)
+        elif args.command == "team":
+            cmd_team(args)
         else:
             parser.print_help()
     except FileNotFoundError as e:

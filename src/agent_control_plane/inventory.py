@@ -15,6 +15,10 @@ from agent_control_plane.models import (
     CostRecord,
     DriftRecord,
     SummaryStats,
+    Team,
+    TeamMember,
+    User,
+    UserRole,
 )
 
 
@@ -84,8 +88,40 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
             message         TEXT,
             detected_at     TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS users (
+            name            TEXT PRIMARY KEY,
+            email           TEXT NOT NULL,
+            role            TEXT NOT NULL DEFAULT 'viewer',
+            api_key_hash    TEXT NOT NULL DEFAULT '',
+            created_at      TEXT NOT NULL,
+            last_seen       TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS teams (
+            id              TEXT PRIMARY KEY,
+            name            TEXT NOT NULL,
+            description     TEXT NOT NULL DEFAULT '',
+            created_at      TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS team_members (
+            user_name       TEXT NOT NULL,
+            team_id         TEXT NOT NULL,
+            role_in_team    TEXT NOT NULL DEFAULT 'viewer',
+            PRIMARY KEY (user_name, team_id),
+            FOREIGN KEY (user_name) REFERENCES users(name) ON DELETE CASCADE,
+            FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+        );
     """)
     conn.commit()
+
+    # Migrate existing databases: add team_id column to agents if missing
+    try:
+        conn.execute("ALTER TABLE agents ADD COLUMN team_id TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # Column already exists
 
 
 def get_connection(db_path: Path | None = None) -> sqlite3.Connection:
@@ -173,6 +209,7 @@ def _row_to_agent(row: sqlite3.Row) -> AgentRecord:
         total_checks=row["total_checks"],
         successful_checks=row["successful_checks"],
         avg_response_time_ms=row["avg_response_time_ms"],
+        team_id=row["team_id"] if row["team_id"] else None,
     )
 
 
@@ -416,9 +453,184 @@ def get_drift_history(
 def get_drift_summary(conn: sqlite3.Connection) -> dict[str, int]:
     """Get summary counts of drift events by severity."""
     rows = conn.execute(
-        "SELECT severity, COUNT(*) as cnt FROM drift_log GROUP BY severity",
+        "SELECT severity, COUNT(*) as cnt FROM drift_log GROUP BY severity"
     ).fetchall()
     summary: dict[str, int] = {}
     for r in rows:
         summary[r["severity"]] = r["cnt"]
     return summary
+
+
+# ---------------------------------------------------------------------------
+# User CRUD
+# ---------------------------------------------------------------------------
+
+
+def upsert_user(conn: sqlite3.Connection, user: User) -> None:
+    """Insert or update a user."""
+    conn.execute(
+        """INSERT INTO users (name, email, role, api_key_hash, created_at, last_seen)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(name) DO UPDATE SET
+               email        = excluded.email,
+               role         = excluded.role,
+               api_key_hash = excluded.api_key_hash,
+               last_seen    = excluded.last_seen""",
+        (user.name, user.email, user.role.value, user.api_key_hash,
+         user.created_at.isoformat(),
+         user.last_seen.isoformat() if user.last_seen else None),
+    )
+    conn.commit()
+
+
+def get_user(conn: sqlite3.Connection, name: str) -> User | None:
+    """Get a user by name."""
+    row = conn.execute("SELECT * FROM users WHERE name = ?", (name,)).fetchone()
+    return _row_to_user(row) if row else None
+
+
+def get_user_by_email(conn: sqlite3.Connection, email: str) -> User | None:
+    """Get a user by email."""
+    row = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+    return _row_to_user(row) if row else None
+
+
+def list_users(conn: sqlite3.Connection) -> list[User]:
+    """List all users."""
+    rows = conn.execute("SELECT * FROM users ORDER BY name").fetchall()
+    return [_row_to_user(r) for r in rows]
+
+
+def delete_user(conn: sqlite3.Connection, name: str) -> None:
+    """Delete a user and their team memberships."""
+    conn.execute("DELETE FROM team_members WHERE user_name = ?", (name,))
+    conn.execute("DELETE FROM users WHERE name = ?", (name,))
+    conn.commit()
+
+
+def check_single_user_mode(conn: sqlite3.Connection) -> bool:
+    """Return True if no users exist (single-user mode)."""
+    count = conn.execute("SELECT COUNT(*) as cnt FROM users").fetchone()
+    return count["cnt"] == 0
+
+
+def _row_to_user(row: sqlite3.Row) -> User:
+    return User(
+        name=row["name"],
+        email=row["email"],
+        role=UserRole(row["role"]),
+        api_key_hash=row["api_key_hash"] if row["api_key_hash"] else "",
+        created_at=datetime.fromisoformat(row["created_at"]),
+        last_seen=datetime.fromisoformat(row["last_seen"]) if row["last_seen"] else None,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Team CRUD
+# ---------------------------------------------------------------------------
+
+
+def upsert_team(conn: sqlite3.Connection, team: Team) -> None:
+    """Insert or update a team."""
+    conn.execute(
+        """INSERT INTO teams (id, name, description, created_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+               name        = excluded.name,
+               description = excluded.description""",
+        (team.id, team.name, team.description, team.created_at.isoformat()),
+    )
+    conn.commit()
+
+
+def get_team(conn: sqlite3.Connection, team_id: str) -> Team | None:
+    """Get a team by ID."""
+    row = conn.execute("SELECT * FROM teams WHERE id = ?", (team_id,)).fetchone()
+    return Team(id=row["id"], name=row["name"], description=row["description"],
+                created_at=datetime.fromisoformat(row["created_at"])) if row else None
+
+
+def list_teams(conn: sqlite3.Connection) -> list[Team]:
+    """List all teams."""
+    rows = conn.execute("SELECT * FROM teams ORDER BY name").fetchall()
+    return [
+        Team(id=r["id"], name=r["name"], description=r["description"],
+             created_at=datetime.fromisoformat(r["created_at"]))
+        for r in rows
+    ]
+
+
+def delete_team(conn: sqlite3.Connection, team_id: str) -> None:
+    """Delete a team and its memberships and unassign its agents."""
+    conn.execute("DELETE FROM team_members WHERE team_id = ?", (team_id,))
+    conn.execute("UPDATE agents SET team_id = NULL WHERE team_id = ?", (team_id,))
+    conn.execute("DELETE FROM teams WHERE id = ?", (team_id,))
+    conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# Team Member CRUD
+# ---------------------------------------------------------------------------
+
+
+def add_team_member(conn: sqlite3.Connection, member: TeamMember) -> None:
+    """Add a user to a team with a role."""
+    conn.execute(
+        """INSERT OR REPLACE INTO team_members (user_name, team_id, role_in_team)
+           VALUES (?, ?, ?)""",
+        (member.user_name, member.team_id, member.role_in_team.value),
+    )
+    conn.commit()
+
+
+def remove_team_member(conn: sqlite3.Connection, user_name: str, team_id: str) -> None:
+    """Remove a user from a team."""
+    conn.execute(
+        "DELETE FROM team_members WHERE user_name = ? AND team_id = ?",
+        (user_name, team_id),
+    )
+    conn.commit()
+
+
+def list_team_members(conn: sqlite3.Connection, team_id: str) -> list[TeamMember]:
+    """List all members of a team."""
+    rows = conn.execute(
+        "SELECT * FROM team_members WHERE team_id = ? ORDER BY user_name", (team_id,)
+    ).fetchall()
+    return [
+        TeamMember(user_name=r["user_name"], team_id=r["team_id"],
+                   role_in_team=UserRole(r["role_in_team"]))
+        for r in rows
+    ]
+
+
+def get_user_teams(conn: sqlite3.Connection, user_name: str) -> list[Team]:
+    """Get all teams a user belongs to."""
+    rows = conn.execute(
+        """SELECT t.* FROM teams t
+           JOIN team_members tm ON t.id = tm.team_id
+           WHERE tm.user_name = ?
+           ORDER BY t.name""",
+        (user_name,),
+    ).fetchall()
+    return [
+        Team(id=r["id"], name=r["name"], description=r["description"],
+             created_at=datetime.fromisoformat(r["created_at"]))
+        for r in rows
+    ]
+
+
+def assign_agent_to_team(conn: sqlite3.Connection, agent_name: str, team_id: str) -> None:
+    """Assign an agent to a team."""
+    conn.execute(
+        "UPDATE agents SET team_id = ? WHERE name = ?", (team_id, agent_name),
+    )
+    conn.commit()
+
+
+def unassign_agent_from_team(conn: sqlite3.Connection, agent_name: str) -> None:
+    """Remove an agent from its team assignment."""
+    conn.execute(
+        "UPDATE agents SET team_id = NULL WHERE name = ?", (agent_name,),
+    )
+    conn.commit()

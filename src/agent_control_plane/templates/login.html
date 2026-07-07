@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — Agent Control Plane</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg: #0f1117; --bg-card: #1a1d27; --bg-hover: #232638;
+            --text: #e1e4ed; --text-dim: #8b8fa3; --border: #2a2d3a;
+            --green: #34d399; --red: #f87171; --yellow: #fbbf24; --blue: #60a5fa;
+            --accent: #6366f1; --accent-hover: #818cf8; --radius: 8px;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg); color: var(--text);
+            display: flex; align-items: center; justify-content: center;
+            min-height: 100vh; margin: 0;
+        }
+        .login-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 2.5rem;
+            width: 100%; max-width: 400px;
+        }
+        .login-card h1 { font-size: 1.3rem; margin-bottom: 0.25rem; color: var(--accent); }
+        .login-card p { color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1.5rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.35rem; }
+        .form-group input {
+            width: 100%; padding: 0.65rem 0.75rem;
+            background: var(--bg); border: 1px solid var(--border);
+            border-radius: var(--radius); color: var(--text); font-size: 0.9rem;
+        }
+        .form-group input:focus { outline: none; border-color: var(--accent); }
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            gap: 0.4rem; width: 100%; padding: 0.65rem 1rem;
+            background: var(--accent); color: white; border: none;
+            border-radius: var(--radius); font-size: 0.9rem; cursor: pointer;
+            transition: background 0.15s; margin-top: 0.5rem;
+        }
+        .btn:hover { background: var(--accent-hover); }
+        .error { color: var(--red); font-size: 0.85rem; margin-top: 0.75rem; text-align: center; }
+        .info { color: var(--text-dim); font-size: 0.8rem; margin-top: 1.5rem; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h1>Agent Control Plane</h1>
+        <p>Sign in with your email and API key</p>
+        <form id="login-form">
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" placeholder="you@example.com" required>
+            </div>
+            <div class="form-group">
+                <label for="api_key">API Key</label>
+                <input type="password" id="api_key" name="api_key" placeholder="acp_..." required>
+            </div>
+            <button type="submit" class="btn">Sign In</button>
+            <div id="error-message" class="error" style="display:none;"></div>
+        </form>
+        <div class="info">Enter the API key shown when your user was created.</div>
+    </div>
+    <script>
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const apiKey = document.getElementById('api_key').value;
+            const errorEl = document.getElementById('error-message');
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, api_key: apiKey }),
+                });
+                if (res.ok) {
+                    window.location.href = '/';
+                } else {
+                    const data = await res.json();
+                    errorEl.textContent = data.detail || 'Login failed';
+                    errorEl.style.display = 'block';
+                }
+            } catch (err) {
+                errorEl.textContent = 'Network error';
+                errorEl.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

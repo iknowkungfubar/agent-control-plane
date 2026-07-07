@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 
 from agent_control_plane.analytics import (
     get_cost_timeseries,
@@ -59,9 +59,166 @@ def create_app() -> FastAPI:
     _html_agent_detail_base = _read_template("agent_detail.html")
     _html_costs = _read_template("costs.html")
     _html_404 = _read_template("404.html")
+    _html_login = _read_template("login.html")
 
     # ------------------------------------------------------------------
-    # API Routes
+    # Auth Routes
+    # ------------------------------------------------------------------
+
+    _SESSION_COOKIE = "acp_session"
+
+    def _get_session_user(request: Request):
+        """Get authenticated user from session cookie."""
+        from agent_control_plane.auth import get_session_user
+        token = request.cookies.get(_SESSION_COOKIE)
+        if not token:
+            return None
+        return get_session_user(token)
+
+    @app.post("/api/login")
+    async def api_login(request: Request):
+        """Authenticate user and set session cookie."""
+        from agent_control_plane.auth import authenticate_email, create_session
+
+        body = await request.json()
+        email = body.get("email", "")
+        api_key = body.get("api_key", "")
+
+        user = authenticate_email(email, api_key)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Invalid email or API key")
+
+        token = create_session(user.name)
+        response = JSONResponse({"status": "ok", "user": user.name, "role": user.role.value})
+        response.set_cookie(
+            key=_SESSION_COOKIE,
+            value=token,
+            max_age=86400,
+            httponly=True,
+            samesite="lax",
+        )
+        return response
+
+    @app.post("/api/logout")
+    def api_logout():
+        """Clear session cookie."""
+        response = JSONResponse({"status": "ok"})
+        response.delete_cookie(key=_SESSION_COOKIE)
+        return response
+
+    @app.get("/api/me")
+    def api_me(request: Request):
+        """Get current session info."""
+        user = _get_session_user(request)
+        if user is None:
+            return {"authenticated": False}
+        return {
+            "authenticated": True,
+            "user": user.name,
+            "role": user.role.value,
+            "single_user_mode": False,
+        }
+
+    @app.get("/login", response_class=HTMLResponse)
+    def login_page():
+        """Login page."""
+        return HTMLResponse(content=_html_login)
+
+    @app.get("/admin", response_class=HTMLResponse)
+    def admin_page():
+        """Admin panel (minimal)."""
+        # Read the admin template or just inline it
+        return HTMLResponse(content=f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Admin — ACP</title>
+<style>
+  *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  :root {{ --bg: #0f1117; --bg-card: #1a1d27; --text: #e1e4ed; --text-dim: #8b8fa3; --border: #2a2d3a; --accent: #6366f1; }}
+  body {{ font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 2rem; }}
+  h1 {{ margin-bottom: 1.5rem; }}
+  table {{ width: 100%; border-collapse: collapse; background: var(--bg-card); border-radius: 8px; overflow: hidden; }}
+  th, td {{ padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }}
+  th {{ font-size: 0.75rem; text-transform: uppercase; color: var(--text-dim); }}
+  a {{ color: var(--accent); text-decoration: none; }}
+  .section {{ margin-bottom: 2rem; }}
+</style></head>
+<body>
+  <h1>Admin Panel</h1>
+  <div class="section" id="users-section">
+    <h2>Users</h2>
+    <table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Created</th></tr></thead>
+    <tbody id="users-tbody"><tr><td colspan="4" class="loading">Loading...</td></tr></tbody></table>
+  </div>
+  <div class="section" id="teams-section">
+    <h2>Teams</h2>
+    <table><thead><tr><th>ID</th><th>Name</th><th>Description</th><th>Members</th></tr></thead>
+    <tbody id="teams-tbody"><tr><td colspan="4" class="loading">Loading...</td></tr></tbody></table>
+  </div>
+  <p><a href="/">← Back to Dashboard</a></p>
+  <script>
+    async function loadAdmin() {{
+      try {{
+        const [usersRes, teamsRes] = await Promise.all([
+          fetch('/api/admin/users'),
+          fetch('/api/admin/teams'),
+        ]);
+        const users = await usersRes.json();
+        const teams = await teamsRes.json();
+        const usersBody = document.getElementById('users-tbody');
+        if (users.users && users.users.length > 0) {{
+          usersBody.innerHTML = users.users.map(u => `<tr><td>${{u.name}}</td><td>${{u.email}}</td><td>${{u.role}}</td><td>${{u.created_at?.slice(0,10) || ''}}</td></tr>`).join('');
+        }} else {{
+          usersBody.innerHTML = '<tr><td colspan="4" class="empty">No users</td></tr>';
+        }}
+        const teamsBody = document.getElementById('teams-tbody');
+        if (teams.teams && teams.teams.length > 0) {{
+          teamsBody.innerHTML = teams.teams.map(t => `<tr><td>${{t.id}}</td><td>${{t.name}}</td><td>${{t.description}}</td><td>${{t.member_count || 0}}</td></tr>`).join('');
+        }} else {{
+          teamsBody.innerHTML = '<tr><td colspan="4" class="empty">No teams</td></tr>';
+        }}
+      }} catch(e) {{
+        document.getElementById('users-tbody').innerHTML = '<tr><td colspan="4" class="error">Failed to load</td></tr>';
+      }}
+    }}
+    loadAdmin();
+  </script>
+</body></html>""")
+
+    # ------------------------------------------------------------------
+    # Admin API endpoints
+    # ------------------------------------------------------------------
+
+    @app.get("/api/admin/users")
+    def api_admin_users():
+        """List all users (admin)."""
+        from agent_control_plane.inventory import list_users
+        conn = _conn()
+        users = list_users(conn)
+        conn.close()
+        return {"users": [
+            {"name": u.name, "email": u.email, "role": u.role.value,
+             "created_at": u.created_at.isoformat()}
+            for u in users
+        ]}
+
+    @app.get("/api/admin/teams")
+    def api_admin_teams():
+        """List all teams with member counts (admin)."""
+        from agent_control_plane.inventory import list_team_members, list_teams
+        conn = _conn()
+        teams = list_teams(conn)
+        result = []
+        for t in teams:
+            members = list_team_members(conn, t.id)
+            result.append({
+                "id": t.id, "name": t.name, "description": t.description,
+                "member_count": len(members),
+            })
+        conn.close()
+        return {"teams": result}
+
+    # ------------------------------------------------------------------
+    # HTML Page Routes
     # ------------------------------------------------------------------
 
     @app.get("/api/status")
