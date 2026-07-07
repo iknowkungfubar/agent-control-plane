@@ -1,0 +1,3 @@
+"""Agent Control Plane — AI Agent Operations Platform."""
+
+__version__ = "0.1.0"

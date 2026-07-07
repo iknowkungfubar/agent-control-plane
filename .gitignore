@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.coverage
+coverage_html/
+.pytest_cache/
+.venv/
+uv.lock
+
+# Project
+*.db
+config.yaml
+acp-export.*
