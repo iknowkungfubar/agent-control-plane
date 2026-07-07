@@ -69,6 +69,17 @@ def _build_parser() -> argparse.ArgumentParser:
     delete_p = sub.add_parser("delete", help="Remove an agent from inventory")
     delete_p.add_argument("name", type=str, help="Agent name to delete")
 
+    # dashboard
+    dash_p = sub.add_parser("dashboard", help="Start the web UI dashboard")
+    dash_p.add_argument(
+        "--host", type=str, default="127.0.0.1",
+        help="Host to bind to (default: 127.0.0.1)",
+    )
+    dash_p.add_argument(
+        "--port", "-p", type=int, default=8337,
+        help="Port to bind to (default: 8337)",
+    )
+
     return parser
 
 
@@ -258,6 +269,20 @@ def cmd_delete(name: str) -> None:
     console.print(f"[green]✓[/green] Agent '{name}' deleted.")
 
 
+def cmd_dashboard(host: str = "127.0.0.1", port: int = 8337) -> None:
+    """Start the web UI dashboard."""
+    try:
+        from agent_control_plane.dashboard import serve_dashboard
+        serve_dashboard(host=host, port=port)
+    except ImportError as e:
+        console.print(f"[red]✗ Dashboard dependencies not installed: {e}[/red]")
+        console.print("Run: pip install fastapi uvicorn jinja2")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]✗ Failed to start dashboard: {e}[/red]")
+        sys.exit(1)
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
     parser = _build_parser()
@@ -282,6 +307,8 @@ def main(argv: list[str] | None = None) -> int:
             cmd_status()
         elif args.command == "delete":
             cmd_delete(args.name)
+        elif args.command == "dashboard":
+            cmd_dashboard(host=args.host, port=args.port)
         else:
             parser.print_help()
     except FileNotFoundError as e:

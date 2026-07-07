@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block nav_agents %}active{% endblock %}
+{% block title %}{{ agent_name }} — Agent Control Plane{% endblock %}
+{% block content %}
+<h2>Agent: {{ agent_name }}</h2>
+<div class="status-bar" id="agent-info-bar"></div>
+<h3 style="margin-top:1.5rem;margin-bottom:0.75rem;">Health History</h3>
+<table>
+    <thead><tr><th>Timestamp</th><th>Status</th><th>Response Time</th><th>HTTP Code</th><th>Error</th></tr></thead>
+    <tbody id="health-table-body"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody>
+</table>
+<a href="/agents" style="display:inline-block;margin-top:1rem;">← Back to all agents</a>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadAgentDetail() {
+    try {
+        const [agentsRes, healthRes] = await Promise.all([
+            fetch('/api/agents'),
+            fetch(`/api/agents/${encodeURIComponent('{{ agent_name }}')}/health`)
+        ]);
+        const agents = await agentsRes.json();
+        const health = await healthRes.json();
+        const agent = agents.agents.find(a => a.name === '{{ agent_name }}');
+
+        const bar = document.getElementById('agent-info-bar');
+        if (agent) {
+            bar.innerHTML = `
+                <div class="status-card"><div class="count" style="color:var(--${agent.status === 'online' ? 'green' : agent.status === 'offline' ? 'red' : 'yellow'})">${agent.status}</div><div class="label">Status</div></div>
+                <div class="status-card"><div class="count">${agent.provider}</div><div class="label">Provider</div></div>
+                <div class="status-card"><div class="count">${agent.avg_response_time_ms > 0 ? agent.avg_response_time_ms + 'ms' : '—'}</div><div class="label">Avg Response</div></div>
+                <div class="status-card"><div class="count">${agent.successful_checks}/${agent.total_checks}</div><div class="label">Checks</div></div>
+            `;
+        }
+
+        const tbody = document.getElementById('health-table-body');
+        const logs = health.health_log || [];
+        if (logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="empty">No health checks recorded yet.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = logs.map(h => `
+            <tr>
+                <td>${new Date(h.timestamp).toLocaleString()}</td>
+                <td><span class="badge ${h.status}">${h.status}</span></td>
+                <td>${h.response_time_ms > 0 ? h.response_time_ms.toFixed(0) + 'ms' : '—'}</td>
+                <td>${h.status_code || '—'}</td>
+                <td>${h.error || '—'}</td>
+            </tr>
+        `).join('');
+    } catch (e) {
+        document.getElementById('health-table-body').innerHTML = `<tr><td colspan="5" class="error">Failed to load: ${e.message}</td></tr>`;
+    }
+}
+loadAgentDetail();
+</script>
+{% endblock %}

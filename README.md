@@ -26,8 +26,9 @@ Existing tools (Langfuse, LangSmith, Arize) focus on **LLM tracing for developer
 - **Health Monitoring** — Ping agent endpoints, detect failures and degradation
 - **Cost Tracking** — Estimate monthly spend per agent/provider
 - **Inventory Management** — Full CRUD for agent records with status history
+- **Web Dashboard** — Real-time browser UI with fleet status, agent list, health history, and cost breakdown
 - **Export** — CSV and JSON export for compliance reporting
-- **CLI Interface** — All operations available from the terminal
+- **CLI Interface** — All operations available from the terminal including `acp dashboard`
 
 ## Installation
 
@@ -179,6 +180,43 @@ agents:
 | `acp export --format json/csv [-o PATH]` | Export inventory data |
 | `acp status` | Show fleet summary statistics |
 | `acp delete <name>` | Remove an agent from inventory |
+| `acp dashboard [--host HOST] [--port PORT]` | Start the web UI dashboard |
+
+## Dashboard
+
+The Agent Control Plane includes a browser-based dashboard for real-time fleet visibility.
+
+### Start the Dashboard
+
+```bash
+acp dashboard
+# Agent Control Plane Dashboard → http://127.0.0.1:8337
+```
+
+Then open http://localhost:8337 in your browser.
+
+### Dashboard Pages
+
+| Page | Route | Description |
+|------|-------|-------------|
+| Fleet Status | `/` | Summary cards (total/online/offline/degraded) + recent agents table |
+| Agents | `/agents` | Full agent list with status, response time, tags |
+| Agent Detail | `/agents/{name}` | Per-agent info + health history timeline |
+| Costs | `/costs` | Monthly cost breakdown per agent with totals |
+
+### API Endpoints
+
+The dashboard server also exposes a REST API:
+
+| Endpoint | Returns |
+|----------|---------|
+| `GET /api/status` | Fleet summary (counts, total cost) |
+| `GET /api/agents` | All agents with status and metadata |
+| `GET /api/agents/{name}/health` | Health check history for one agent |
+| `GET /api/costs` | Per-agent cost breakdown |
+| `GET /api/export` | Full inventory as JSON download |
+
+All endpoints return JSON and are suitable for integration with monitoring tools.
 
 ## Development
 
@@ -233,7 +271,7 @@ PYTHONPATH="" .venv/bin/python -m pytest tests/ --cov=agent_control_plane
 - [x] Cost tracking by provider
 - [x] CSV/JSON export
 - [x] E2E integration tests
-- [ ] Web UI dashboard
+- [x] Web UI dashboard (FastAPI + responsive HTML/JS)
 - [ ] Slack/email alerts on agent status changes
 - [ ] Automatic agent discovery (network scan, MCP server detection)
 - [ ] Historical trend charts

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block nav_dashboard %}active{% endblock %}
+{% block title %}Dashboard — Agent Control Plane{% endblock %}
+{% block content %}
+<h2>Fleet Status</h2>
+<div class="status-bar" id="status-cards">
+    <div class="status-card"><div class="count" id="stat-total">—</div><div class="label">Total Agents</div></div>
+    <div class="status-card"><div class="count" style="color:var(--green)" id="stat-online">—</div><div class="label">Online</div></div>
+    <div class="status-card"><div class="count" style="color:var(--red)" id="stat-offline">—</div><div class="label">Offline</div></div>
+    <div class="status-card"><div class="count" style="color:var(--yellow)" id="stat-degraded">—</div><div class="label">Degraded</div></div>
+    <div class="status-card"><div class="count" style="color:var(--accent)" id="stat-cost">—</div><div class="label">Est. Monthly Cost</div></div>
+</div>
+
+<h2 style="margin-top:2rem;">Recent Agents</h2>
+<table>
+    <thead><tr><th>Agent</th><th>Provider</th><th>Status</th><th>Response</th><th>Checks</th><th>Last Seen</th></tr></thead>
+    <tbody id="agent-table-body"><tr><td colspan="6" class="loading">Loading...</td></tr></tbody>
+</table>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadDashboard() {
+    try {
+        const [statusRes, agentsRes] = await Promise.all([
+            fetch('/api/status'), fetch('/api/agents')
+        ]);
+        const status = await statusRes.json();
+        const agents = await agentsRes.json();
+
+        document.getElementById('stat-total').textContent = status.total_agents;
+        document.getElementById('stat-online').textContent = status.online;
+        document.getElementById('stat-offline').textContent = status.offline;
+        document.getElementById('stat-degraded').textContent = status.degraded;
+        document.getElementById('stat-cost').textContent = '$' + (status.total_estimated_cost_monthly_usd || 0).toFixed(2);
+
+        const tbody = document.getElementById('agent-table-body');
+        if (agents.agents.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="empty">No agents found. Run <code>acp scan</code> first.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = agents.agents.map(a => `
+            <tr>
+                <td><a href="/agents/${encodeURIComponent(a.name)}">${a.name}</a></td>
+                <td>${a.provider}</td>
+                <td><span class="badge ${a.status}">${a.status}</span></td>
+                <td>${a.avg_response_time_ms > 0 ? a.avg_response_time_ms + 'ms' : '—'}</td>
+                <td>${a.successful_checks}/${a.total_checks}</td>
+                <td>${new Date(a.last_seen).toLocaleString()}</td>
+            </tr>
+        `).join('');
+    } catch (e) {
+        document.getElementById('agent-table-body').innerHTML = `<tr><td colspan="6" class="error">Failed to load: ${e.message}</td></tr>`;
+    }
+}
+loadDashboard();
+startAutoRefresh(loadDashboard, 30000);
+</script>
+{% endblock %}

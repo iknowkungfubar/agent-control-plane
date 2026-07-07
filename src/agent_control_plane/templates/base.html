@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Agent Control Plane{% endblock %}</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg: #0f1117; --bg-card: #1a1d27; --bg-hover: #232638;
+            --text: #e1e4ed; --text-dim: #8b8fa3; --border: #2a2d3a;
+            --green: #34d399; --red: #f87171; --yellow: #fbbf24; --blue: #60a5fa; --gray: #6b7280;
+            --accent: #6366f1; --accent-hover: #818cf8; --radius: 8px;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh;
+        }
+        .layout { display: flex; min-height: 100vh; }
+        .sidebar {
+            width: 220px; background: var(--bg-card); border-right: 1px solid var(--border);
+            padding: 1.5rem; flex-shrink: 0;
+        }
+        .sidebar h1 { font-size: 1.1rem; font-weight: 600; margin-bottom: 1.5rem; color: var(--accent); }
+        .sidebar h1 span { color: var(--text-dim); font-weight: 400; }
+        .sidebar nav { display: flex; flex-direction: column; gap: 0.25rem; }
+        .sidebar a {
+            display: block; padding: 0.5rem 0.75rem; border-radius: var(--radius);
+            color: var(--text-dim); text-decoration: none; font-size: 0.9rem; transition: all 0.15s;
+        }
+        .sidebar a:hover, .sidebar a.active { background: var(--bg-hover); color: var(--text); }
+        .sidebar a.active { border-left: 3px solid var(--accent); padding-left: calc(0.75rem - 3px); }
+        .main { flex: 1; padding: 2rem; max-width: 1200px; }
+        .main h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 1.5rem; }
+        .status-bar {
+            display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap;
+        }
+        .status-card {
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+            padding: 1rem 1.5rem; min-width: 140px; flex: 1;
+        }
+        .status-card .count { font-size: 2rem; font-weight: 700; }
+        .status-card .label { font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+        table {
+            width: 100%; border-collapse: collapse; background: var(--bg-card);
+            border-radius: var(--radius); overflow: hidden;
+        }
+        th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); font-weight: 600; }
+        td { font-size: 0.9rem; }
+        tr:hover td { background: var(--bg-hover); }
+        .badge {
+            display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px;
+            font-size: 0.75rem; font-weight: 600; text-transform: capitalize;
+        }
+        .badge.online { background: rgba(52, 211, 153, 0.15); color: var(--green); }
+        .badge.offline { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+        .badge.degraded { background: rgba(251, 191, 36, 0.15); color: var(--yellow); }
+        .badge.unknown { background: rgba(107, 114, 128, 0.15); color: var(--gray); }
+        .tag { display: inline-block; padding: 0.1rem 0.4rem; background: var(--bg-hover); border-radius: 4px; font-size: 0.75rem; margin: 0.1rem; }
+        .btn {
+            display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.5rem 1rem;
+            background: var(--accent); color: white; border: none; border-radius: var(--radius);
+            font-size: 0.85rem; cursor: pointer; text-decoration: none; transition: background 0.15s;
+        }
+        .btn:hover { background: var(--accent-hover); }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+        .btn-outline:hover { background: var(--bg-hover); }
+        a { color: var(--blue); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .empty { text-align: center; padding: 3rem; color: var(--text-dim); }
+        .loading { text-align: center; padding: 2rem; color: var(--text-dim); }
+        .error { color: var(--red); }
+        @media (max-width: 768px) {
+            .layout { flex-direction: column; }
+            .sidebar { width: 100%; padding: 1rem; border-right: none; border-bottom: 1px solid var(--border); }
+            .sidebar nav { flex-direction: row; flex-wrap: wrap; }
+            .main { padding: 1rem; }
+            .status-bar { flex-direction: column; }
+            table { font-size: 0.8rem; }
+            th, td { padding: 0.5rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="layout">
+    <aside class="sidebar">
+        <h1>ACP <span>Dashboard</span></h1>
+        <nav>
+            <a href="/" class="{% block nav_dashboard %}{% endblock %}">📊 Fleet Status</a>
+            <a href="/agents" class="{% block nav_agents %}{% endblock %}">🤖 Agents</a>
+            <a href="/costs" class="{% block nav_costs %}{% endblock %}">💰 Costs</a>
+            <a href="/api/export" class="btn btn-outline" style="margin-top:1rem;width:100%;justify-content:center;">⬇ Export JSON</a>
+        </nav>
+    </aside>
+    <main class="main">
+        {% block content %}{% endblock %}
+    </main>
+</div>
+<script>
+    // Auto-refresh every 30s for pages that fetch data
+    let refreshInterval = null;
+    function startAutoRefresh(fn, ms=30000) {
+        if (refreshInterval) clearInterval(refreshInterval);
+        refreshInterval = setInterval(fn, ms);
+    }
+    function stopAutoRefresh() { if (refreshInterval) { clearInterval(refreshInterval); refreshInterval = null; } }
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

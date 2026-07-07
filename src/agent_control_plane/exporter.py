@@ -11,13 +11,16 @@ from typing import Any
 from agent_control_plane.inventory import get_connection, get_summary_stats, list_agents, list_cost_records
 
 
-def build_export_data() -> dict[str, Any]:
+def build_export_data(db_path: Path | None = None) -> dict[str, Any]:
     """Build a complete export data structure.
+
+    Args:
+        db_path: Optional explicit database path.
 
     Returns:
         Dict with agents, cost_records, summary, and export timestamp.
     """
-    conn = get_connection()
+    conn = get_connection(db_path)
     agents = list_agents(conn)
     costs = list_cost_records(conn)
     summary = get_summary_stats(conn)
@@ -62,16 +65,17 @@ def build_export_data() -> dict[str, Any]:
     }
 
 
-def export_json(output_path: Path) -> Path:
+def export_json(output_path: Path, db_path: Path | None = None) -> Path:
     """Export inventory to JSON file.
 
     Args:
         output_path: Path for the JSON output.
+        db_path: Optional explicit database path.
 
     Returns:
         Path to the written file.
     """
-    data = build_export_data()
+    data = build_export_data(db_path=db_path)
     output_path.write_text(json.dumps(data, indent=2))
     return output_path
 

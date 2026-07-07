@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block nav_agents %}active{% endblock %}
+{% block title %}Agents — Agent Control Plane{% endblock %}
+{% block content %}
+<h2>All Agents</h2>
+<table>
+    <thead><tr><th>Name</th><th>Provider</th><th>URL</th><th>Status</th><th>Response</th><th>Tags</th><th>Last Seen</th></tr></thead>
+    <tbody id="agent-table-body"><tr><td colspan="7" class="loading">Loading...</td></tr></tbody>
+</table>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadAgents() {
+    try {
+        const res = await fetch('/api/agents');
+        const data = await res.json();
+        const tbody = document.getElementById('agent-table-body');
+        if (data.agents.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="empty">No agents in inventory.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.agents.map(a => `
+            <tr>
+                <td><a href="/agents/${encodeURIComponent(a.name)}">${a.name}</a></td>
+                <td>${a.provider}</td>
+                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${a.url}</td>
+                <td><span class="badge ${a.status}">${a.status}</span></td>
+                <td>${a.avg_response_time_ms > 0 ? a.avg_response_time_ms + 'ms' : '—'}</td>
+                <td>${(a.tags || []).map(t => `<span class="tag">${t}</span>`).join('') || '—'}</td>
+                <td>${new Date(a.last_seen).toLocaleString()}</td>
+            </tr>
+        `).join('');
+    } catch (e) {
+        document.getElementById('agent-table-body').innerHTML = `<tr><td colspan="7" class="error">Failed to load: ${e.message}</td></tr>`;
+    }
+}
+loadAgents();
+</script>
+{% endblock %}

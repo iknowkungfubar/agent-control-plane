@@ -1,0 +1,204 @@
+"""FastAPI dashboard for Agent Control Plane."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse
+
+from agent_control_plane.config import get_home
+from agent_control_plane.inventory import (
+    get_connection,
+    get_agent,
+    get_health_history,
+    get_summary_stats,
+    list_agents,
+    list_cost_records,
+)
+
+
+def _read_template(name: str) -> str:
+    """Read an HTML template file from the templates directory."""
+    pkg_dir = Path(__file__).parent
+    template_path = pkg_dir / "templates" / name
+    return template_path.read_text()
+
+
+def create_app() -> FastAPI:
+    """Create and configure the FastAPI application."""
+    app = FastAPI(
+        title="Agent Control Plane",
+        version="0.1.0",
+        description="AI Agent Operations Platform Dashboard",
+    )
+
+    # Capture DB path at creation time so TestClient threads work
+    from agent_control_plane.config import get_db_path
+    _db_path = get_db_path()
+
+    def _conn():
+        return get_connection(_db_path)
+
+    # Add CORS middleware BEFORE routes
+    from starlette.middleware.cors import CORSMiddleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Cache templates in memory
+    _html_dashboard = _read_template("dashboard.html")
+    _html_agents = _read_template("agents.html")
+    _html_agent_detail_base = _read_template("agent_detail.html")
+    _html_costs = _read_template("costs.html")
+    _html_404 = _read_template("404.html")
+
+    # ------------------------------------------------------------------
+    # API Routes
+    # ------------------------------------------------------------------
+
+    @app.get("/api/status")
+    def api_status():
+        """Fleet status summary."""
+        conn = _conn()
+        stats = get_summary_stats(conn)
+        conn.close()
+        return {
+            "total_agents": stats.total_agents,
+            "online": stats.online,
+            "offline": stats.offline,
+            "degraded": stats.degraded,
+            "unknown": stats.unknown,
+            "total_estimated_cost_monthly_usd": stats.total_estimated_cost_monthly_usd,
+            "total_checks_run": stats.total_checks_run,
+        }
+
+    @app.get("/api/agents")
+    def api_agents():
+        """List all agents."""
+        conn = _conn()
+        agents = list_agents(conn)
+        conn.close()
+        return {
+            "agents": [
+                {
+                    "name": a.name,
+                    "url": a.url,
+                    "provider": a.provider,
+                    "status": a.status.value,
+                    "tags": a.tags,
+                    "first_seen": a.first_seen.isoformat(),
+                    "last_seen": a.last_seen.isoformat(),
+                    "total_checks": a.total_checks,
+                    "successful_checks": a.successful_checks,
+                    "avg_response_time_ms": round(a.avg_response_time_ms, 2),
+                }
+                for a in agents
+            ]
+        }
+
+    @app.get("/api/agents/{name}/health")
+    def api_agent_health(name: str):
+        """Health check history for a specific agent."""
+        conn = _conn()
+        agent = get_agent(conn, name)
+        if agent is None:
+            conn.close()
+            raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
+        history = get_health_history(conn, name)
+        conn.close()
+        return {
+            "agent_name": name,
+            "health_log": [
+                {
+                    "id": h["id"],
+                    "status": h["status"],
+                    "response_time_ms": h["response_time_ms"],
+                    "status_code": h["status_code"],
+                    "error": h["error"],
+                    "timestamp": h["timestamp"],
+                }
+                for h in history
+            ],
+        }
+
+    @app.get("/api/costs")
+    def api_costs():
+        """Cost breakdown per agent."""
+        conn = _conn()
+        costs = list_cost_records(conn)
+        conn.close()
+        return {
+            "costs": [
+                {
+                    "agent_name": c.agent_name,
+                    "month": c.month,
+                    "estimated_tokens_in": c.estimated_tokens_in,
+                    "estimated_tokens_out": c.estimated_tokens_out,
+                    "estimated_cost_usd": c.estimated_cost_usd,
+                }
+                for c in costs
+            ],
+            "total_monthly_cost": sum(c.estimated_cost_usd for c in costs),
+        }
+
+    @app.get("/api/export")
+    def api_export():
+        """Full inventory export as JSON."""
+        from agent_control_plane.exporter import build_export_data
+        data = build_export_data(db_path=_db_path)
+        return JSONResponse(
+            content=data,
+            media_type="application/json",
+            headers={"Content-Disposition": "attachment; filename=acp-inventory.json"},
+        )
+
+    # ------------------------------------------------------------------
+    # HTML Page Routes
+    # ------------------------------------------------------------------
+
+    @app.get("/", response_class=HTMLResponse)
+    def dashboard_page():
+        """Main dashboard page."""
+        return HTMLResponse(content=_html_dashboard)
+
+    @app.get("/agents", response_class=HTMLResponse)
+    def agents_page():
+        """Agent list page."""
+        return HTMLResponse(content=_html_agents)
+
+    @app.get("/agents/{name}", response_class=HTMLResponse)
+    def agent_detail_page(name: str):
+        """Agent detail page."""
+        conn = _conn()
+        agent = get_agent(conn, name)
+        conn.close()
+        if agent is None:
+            raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
+        return HTMLResponse(content=_html_agent_detail_base.replace("{{ agent_name }}", name))
+
+    @app.get("/costs", response_class=HTMLResponse)
+    def costs_page():
+        """Cost breakdown page."""
+        return HTMLResponse(content=_html_costs)
+
+    # ------------------------------------------------------------------
+    # Error Handling
+    # ------------------------------------------------------------------
+
+    @app.exception_handler(404)
+    async def not_found_handler(request, exc):
+        return HTMLResponse(content=_html_404, status_code=404)
+
+    return app
+
+
+def serve_dashboard(host: str = "127.0.0.1", port: int = 8337) -> None:
+    """Start the dashboard server."""
+    import uvicorn
+    app = create_app()
+    print(f"  Agent Control Plane Dashboard → http://{host}:{port}")
+    uvicorn.run(app, host=host, port=port, log_level="info")

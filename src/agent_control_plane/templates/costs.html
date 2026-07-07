@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block nav_costs %}active{% endblock %}
+{% block title %}Costs — Agent Control Plane{% endblock %}
+{% block content %}
+<h2>Cost Breakdown</h2>
+<div id="cost-summary" style="margin-bottom:1.5rem;"></div>
+<table>
+    <thead><tr><th>Agent</th><th>Month</th><th>Tokens In</th><th>Tokens Out</th><th>Est. Cost</th></tr></thead>
+    <tbody id="cost-table-body"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody>
+</table>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadCosts() {
+    try {
+        const res = await fetch('/api/costs');
+        const data = await res.json();
+        document.getElementById('cost-summary').innerHTML = `
+            <div class="status-card" style="max-width:300px;">
+                <div class="count" style="color:var(--accent)">$${data.total_monthly_cost.toFixed(2)}</div>
+                <div class="label">Total Estimated Monthly Cost</div>
+            </div>
+        `;
+        const tbody = document.getElementById('cost-table-body');
+        if (!data.costs || data.costs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="empty">No cost data. Record costs via API or <code>acp</code> CLI.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.costs.map(c => `
+            <tr>
+                <td>${c.agent_name}</td>
+                <td>${c.month}</td>
+                <td>${(c.estimated_tokens_in || 0).toLocaleString()}</td>
+                <td>${(c.estimated_tokens_out || 0).toLocaleString()}</td>
+                <td>$${c.estimated_cost_usd.toFixed(2)}</td>
+            </tr>
+        `).join('');
+    } catch (e) {
+        document.getElementById('cost-table-body').innerHTML = `<tr><td colspan="5" class="error">Failed to load: ${e.message}</td></tr>`;
+    }
+}
+loadCosts();
+</script>
+{% endblock %}
