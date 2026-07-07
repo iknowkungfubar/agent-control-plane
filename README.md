@@ -181,6 +181,51 @@ agents:
 | `acp status` | Show fleet summary statistics |
 | `acp delete <name>` | Remove an agent from inventory |
 | `acp dashboard [--host HOST] [--port PORT]` | Start the web UI dashboard |
+| `acp discover [--host HOST] [--ports PORTS] [--register]` | Auto-discover AI agents on a host |
+
+## Auto-Discovery
+
+Instead of manually listing every agent in the config file, `acp discover` scans hosts for running agent endpoints.
+
+```bash
+# Scan localhost for common agent ports
+acp discover
+
+# Scan a specific host with custom ports
+acp discover --host 192.168.1.100 --ports 11434,8080,8000
+
+# Scan a port range
+acp discover --host 10.0.0.50 --ports 8000-8010
+
+# Discover and register in one command
+acp discover --host 127.0.0.1 --register --timeout 1.5
+```
+
+### How It Works
+
+The discovery engine probes each port by making HTTP requests to known paths:
+
+| Path | What it checks |
+|------|---------------|
+| `/v1/models` | OpenAI-compatible API |
+| `/v1/chat/completions` | OpenAI-compatible |
+| `/v1/messages` | Anthropic API |
+| `/api/tags` | Ollama |
+| `/mcp` | MCP servers |
+| `/health` | Generic health endpoint |
+
+Found agents include auto-generated names, detected provider types, and response metadata. Use `--register` to add them to inventory.
+
+### Discovery Configuration
+
+Scan behavior can be customized in `config.yaml`:
+
+```yaml
+discovery:
+  default_ports: [11434, 8080, 8000, 5000, 3000, 8337, 9090]
+  timeout: 2.0
+  exclude: ["192.168.1.1", "10.0.0.*"]  # Skip patterns
+```
 
 ## Alerts & Notifications
 
@@ -350,8 +395,9 @@ PYTHONPATH="" .venv/bin/python -m pytest tests/ --cov=agent_control_plane
 - [x] CSV/JSON export
 - [x] E2E integration tests
 - [x] Web UI dashboard (FastAPI + responsive HTML/JS)
-- [ ] Slack/email alerts on agent status changes
-- [ ] Automatic agent discovery (network scan, MCP server detection)
+- [x] Prometheus metrics endpoint
+- [x] Slack/email/webhook alerts on agent status changes
+- [x] Automatic agent discovery (port scan + MCP detection)
 - [ ] Historical trend charts
 - [ ] Multi-user/team support
 - [ ] Prometheus metrics endpoint

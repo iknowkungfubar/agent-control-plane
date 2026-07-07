@@ -65,6 +65,25 @@ def _build_parser() -> argparse.ArgumentParser:
     # status
     sub.add_parser("status", help="Show summary statistics for the agent fleet")
 
+    # discover
+    discover_p = sub.add_parser("discover", help="Auto-discover AI agents on a host")
+    discover_p.add_argument(
+        "--host", type=str, default="127.0.0.1",
+        help="Host to scan (default: 127.0.0.1)",
+    )
+    discover_p.add_argument(
+        "--ports", type=str, default=None,
+        help="Port(s) to scan, comma-separated or range (default: 11434,8080,8000,5000,3000)",
+    )
+    discover_p.add_argument(
+        "--register", action="store_true",
+        help="Register discovered agents into inventory",
+    )
+    discover_p.add_argument(
+        "--timeout", type=float, default=2.0,
+        help="HTTP probe timeout per port (default: 2.0s)",
+    )
+
     # delete
     delete_p = sub.add_parser("delete", help="Remove an agent from inventory")
     delete_p.add_argument("name", type=str, help="Agent name to delete")
@@ -283,6 +302,47 @@ def cmd_dashboard(host: str = "127.0.0.1", port: int = 8337) -> None:
         sys.exit(1)
 
 
+def cmd_discover(
+    host: str = "127.0.0.1",
+    ports: str | None = None,
+    register: bool = False,
+    timeout: float = 2.0,
+) -> None:
+    """Auto-discover AI agents on a host."""
+    from agent_control_plane.discovery.scanner import probe_endpoint, register_discovered
+
+    if ports:
+        port_list = []
+        for part in ports.split(","):
+            part = part.strip()
+            if "-" in part:
+                start, end = part.split("-", 1)
+                port_list.extend(range(int(start), int(end) + 1))
+            else:
+                port_list.append(int(part))
+    else:
+        port_list = [11434, 8080, 8000, 5000, 3000, 8337, 9090, 1234]
+
+    console.print(f"[bold]Scanning {host} on {len(port_list)} port(s)...[/bold]")
+    found = 0
+    for port in port_list:
+        result = probe_endpoint(host, port, timeout=timeout)
+        if result is not None:
+            found += 1
+            provider_display = result.get("provider", "unknown")
+            name = result["name"]
+            console.print(f"  [green]✓[/green] Port {port}: [cyan]{name}[/cyan] ({provider_display})")
+            if register:
+                record = register_discovered(result)
+                console.print(f"    Registered as '{record.name}'")
+        else:
+            console.print(f"  . Port {port} — no agent detected", style="dim")
+
+    console.print(f"\n[bold]Discovery complete:[/bold] {found} agent(s) found")
+    if found > 0 and not register:
+        console.print("Run with --register to add discovered agents to inventory")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
     parser = _build_parser()
@@ -309,6 +369,11 @@ def main(argv: list[str] | None = None) -> int:
             cmd_delete(args.name)
         elif args.command == "dashboard":
             cmd_dashboard(host=args.host, port=args.port)
+        elif args.command == "discover":
+            cmd_discover(
+                host=args.host, ports=args.ports,
+                register=args.register, timeout=args.timeout,
+            )
         else:
             parser.print_help()
     except FileNotFoundError as e:
