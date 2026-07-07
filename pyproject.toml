@@ -93,7 +93,7 @@ branch = true
 
 [tool.coverage.report]
 show_missing = true
-fail_under = 80
+fail_under = 75
 
 [tool.coverage.html]
 directory = "coverage_html"

@@ -421,7 +421,65 @@ acp drift-report
 3. **Alert integration** — When drift is detected, a `DRIFT` alert fires through the configured notification channels (Slack, email, webhook).
 4. **Dashboard** — Each agent's detail page shows drift event history with severity badges.
 
-## Development
+## Users & Teams
+
+Agent Control Plane supports multi-user operation with API key authentication
+and team-based access control.
+
+### Single-User Mode
+
+By default (no users configured), ACP runs in **single-user mode** with no
+authentication required. This preserves backward compatibility.
+
+### Managing Users
+
+```bash
+# Create a user (shows API key once)
+acp user create alice --email alice@example.com --role admin
+
+# List users
+acp user list
+
+# Delete a user
+acp user delete alice
+```
+
+### Managing Teams
+
+```bash
+# Create a team
+acp team create infra --name "Infrastructure" --desc "Infra team"
+
+# List teams
+acp team list
+
+# Add a user to a team
+acp team add-member infra --user alice --role operator
+
+# Remove a user from a team
+acp team remove-member infra --user alice
+
+# Assign an agent to a team
+acp team add-agent infra --agent my-agent
+
+# Remove an agent from a team
+acp team remove-agent --agent my-agent
+```
+
+### Dashboard Login
+
+1. Navigate to `/login` on the dashboard
+2. Enter your email and API key
+3. Signed-in users see their name/role in the sidebar
+4. Admin users can access `/admin` for user/team management
+
+### User Roles
+
+| Role | Permissions |
+|------|------------|
+| **admin** | Full access to all teams, user management, team management |
+| **operator** | Manage agents within assigned teams |
+| **viewer** | Read-only access to assigned team agents |
 
 ### Setup
 
@@ -481,7 +539,7 @@ PYTHONPATH="" .venv/bin/python -m pytest tests/ --cov=agent_control_plane
 - [x] Historical trend charts (health time-series + cost trend with Canvas charts)
 - [x] Data retention (configurable health log cleanup)
 - [x] Agent configuration drift detection (baselines, drift checking, alerts, dashboard display)
-- [ ] Multi-user/team support
+- [x] Multi-user/team support (API key auth, team scoping, dashboard login, admin panel)
 
 ## License
 

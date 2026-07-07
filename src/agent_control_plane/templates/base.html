@@ -96,6 +96,11 @@
             <a href="/agents" class="{% block nav_agents %}{% endblock %}">🤖 Agents</a>
             <a href="/costs" class="{% block nav_costs %}{% endblock %}">💰 Costs</a>
             <a href="/api/export" class="btn btn-outline" style="margin-top:1rem;width:100%;justify-content:center;">⬇ Export JSON</a>
+            <hr style="border-color:var(--border);margin:0.75rem 0;">
+            <a href="/admin" style="font-size:0.8rem;">⚙️ Admin</a>
+            <a id="login-link" href="/login" style="font-size:0.8rem;display:none;">🔑 Login</a>
+            <a id="logout-link" href="#" style="font-size:0.8rem;display:none;" onclick="logout()">🚪 Logout</a>
+            <span id="user-info" style="font-size:0.75rem;color:var(--text-dim);padding:0.25rem 0.75rem;display:none;"></span>
         </nav>
     </aside>
     <main class="main">
@@ -103,6 +108,32 @@
     </main>
 </div>
 <script>
+    // Auth session check
+    async function checkAuth() {
+        try {
+            const res = await fetch('/api/me');
+            const data = await res.json();
+            const loginLink = document.getElementById('login-link');
+            const logoutLink = document.getElementById('logout-link');
+            const userInfo = document.getElementById('user-info');
+            if (data.authenticated) {
+                loginLink.style.display = 'none';
+                logoutLink.style.display = 'block';
+                userInfo.textContent = `👤 ${data.user} (${data.role})`;
+                userInfo.style.display = 'block';
+            } else {
+                loginLink.style.display = 'block';
+                logoutLink.style.display = 'none';
+                userInfo.style.display = 'none';
+            }
+        } catch(e) {}
+    }
+    async function logout() {
+        await fetch('/api/logout', { method: 'POST' });
+        window.location.href = '/login';
+    }
+    checkAuth();
+
     // Auto-refresh every 30s for pages that fetch data
     let refreshInterval = null;
     function startAutoRefresh(fn, ms=30000) {

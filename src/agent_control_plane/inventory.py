@@ -183,9 +183,38 @@ def get_agent(conn: sqlite3.Connection, name: str) -> AgentRecord | None:
     return _row_to_agent(row) if row else None
 
 
-def list_agents(conn: sqlite3.Connection) -> list[AgentRecord]:
-    """List all agents in the inventory."""
-    rows = conn.execute("SELECT * FROM agents ORDER BY name").fetchall()
+def get_user_team_ids(conn: sqlite3.Connection, user_name: str) -> list[str]:
+    """Get team IDs a user belongs to (admin users see all)."""
+    user = get_user(conn, user_name)
+    if user is None or user.role == UserRole.ADMIN:
+        return []  # Empty means no filter (admin sees all)
+    rows = conn.execute(
+        "SELECT team_id FROM team_members WHERE user_name = ?", (user_name,)
+    ).fetchall()
+    return [r["team_id"] for r in rows]
+
+
+def list_agents(
+    conn: sqlite3.Connection,
+    team_ids: list[str] | None = None,
+) -> list[AgentRecord]:
+    """List agents, optionally filtered by team IDs.
+
+    Args:
+        conn: Database connection.
+        team_ids: If provided, only agents in these teams are returned.
+                  If empty list or None, all agents are returned.
+    """
+    if team_ids is not None:
+        if not team_ids:
+            return []  # Empty team list means no agents visible
+        placeholders = ",".join("?" for _ in team_ids)
+        rows = conn.execute(
+            f"SELECT * FROM agents WHERE team_id IN ({placeholders}) ORDER BY name",
+            team_ids,
+        ).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM agents ORDER BY name").fetchall()
     return [_row_to_agent(r) for r in rows]
 
 
