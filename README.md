@@ -579,4 +579,4 @@ MIT — see [LICENSE](LICENSE).
 
 ## Author
 
-iknowkungfubar — hello@turintech.solutions
+iknowkungfubar — hello@turintechsolutions.com
