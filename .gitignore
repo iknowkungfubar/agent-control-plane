@@ -15,3 +15,26 @@ acp-export.*
 
 # Hermes SDLC local state
 .hermes/
+
+# AI Agent Artifacts — security: do not commit  
+CLAUDE.md  
+AGENTS.md  
+CLAUDE_CODE.md  
+RULES.md  
+SOUL.md  
+.cursor/  
+.cursorrules  
+.windsurfrules  
+.opencode/  
+.aider*  
+COPILOT_INSTRUCTIONS.md  
+.claude/  
+CONTEXT.md  
+MEMORY.md  
+SKILL.md  
+ai-instructions.md  
+ai-context.md  
+.github/copilot-instructions.md  
+*.hermes-profile  
+loop-state.json  
+loop-*.json  
