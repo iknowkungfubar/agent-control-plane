@@ -2,7 +2,8 @@
 
 **AI Agent Operations Platform** — discover, inventory, monitor, and track costs for AI agents across your organization.
 
-[![Tests](https://github.com/iknowkungfubar/agent-control-plane/actions/workflows/ci.yml/badge.svg)](https://github.com/iknowkungfubar/agent-control-plane/actions)
+[![CI](https://github.com/iknowkungfubar/agent-control-plane/actions/workflows/ci.yml/badge.svg)](https://github.com/iknowkungfubar/agent-control-plane/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/iknowkungfubar/agent-control-plane/actions/workflows/ci.yml/badge.svg?job=CodeQL)](https://github.com/iknowkungfubar/agent-control-plane/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-70%25-yellow)](https://github.com/iknowkungfubar/agent-control-plane)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
