@@ -5,16 +5,19 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from collections.abc import Generator
 from datetime import UTC
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from threading import Thread
+from typing import TYPE_CHECKING
 
 import pytest
 import yaml
 
 from agent_control_plane.models import AgentEndpoint
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 
 @pytest.fixture(autouse=True)
@@ -76,7 +79,7 @@ class TestCoverageHealth:
         """Agent returning 'degraded' status in JSON is detected."""
         from agent_control_plane.health import check_agent_health
         ep = AgentEndpoint(name="deg", url=f"http://127.0.0.1:{degraded_port}")
-        status, elapsed, code, error = check_agent_health(ep)
+        status, _elapsed, _code, _error = check_agent_health(ep)
         assert status.value == "degraded"
 
     def test_malformed_json(self):
@@ -101,7 +104,7 @@ class TestCoverageHealth:
 
         Thread(target=_respond, daemon=True).start()
         ep = AgentEndpoint(name="raw", url=f"http://127.0.0.1:{port}")
-        status, elapsed, code, error = check_agent_health(ep, timeout=3)
+        status, _elapsed, _code, _error = check_agent_health(ep, timeout=3)
         assert status.value == "online"
 
     def test_unexpected_status_code(self, degraded_port: int):

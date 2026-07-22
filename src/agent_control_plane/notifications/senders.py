@@ -6,11 +6,9 @@ a dict with 'success' and optionally 'error' keys.
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import httpx
-
 
 # ---------------------------------------------------------------------------
 # Webhook sender
@@ -55,6 +53,7 @@ def send_webhook(
     Returns:
         Dict with keys: success (bool), status_code (int or None),
         error (str or None).
+
     """
     if not url:
         return {"success": False, "status_code": None, "error": "No URL configured"}
@@ -142,6 +141,7 @@ def send_slack(
     Returns:
         Dict with keys: success (bool), status_code (int or None),
         error (str or None).
+
     """
     if not webhook_url:
         return {"success": False, "status_code": None, "error": "No Slack webhook URL"}
@@ -204,7 +204,7 @@ def format_discord(
                 ],
                 "footer": {"text": "Agent Control Plane"},
                 "timestamp": __import__("datetime").datetime.now(
-                    __import__("datetime").timezone.utc
+                    __import__("datetime").timezone.utc,
                 ).isoformat(),
             },
         ],
@@ -226,6 +226,7 @@ def send_discord(
     Returns:
         Dict with keys: success (bool), status_code (int or None),
         error (str or None).
+
     """
     if not webhook_url:
         return {"success": False, "status_code": None, "error": "No Discord webhook URL"}

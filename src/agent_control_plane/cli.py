@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from rich.console import Console
@@ -116,7 +116,7 @@ def _build_parser() -> argparse.ArgumentParser:
     cb_show = cb_sub.add_parser("show", help="Show baseline for an agent")
     cb_show.add_argument("name", type=str, help="Agent name")
 
-    cb_list = cb_sub.add_parser("list", help="List all baselines")
+    cb_sub.add_parser("list", help="List all baselines")
 
     cb_del = cb_sub.add_parser("delete", help="Delete a baseline")
     cb_del.add_argument("name", type=str, help="Agent name")
@@ -544,10 +544,7 @@ def cmd_drift_check(name: str | None = None, timeout: float = 5.0) -> None:
     """Check agents for configuration drift."""
     from agent_control_plane.drift import check_all_drift, check_drift
 
-    if name:
-        reports = [check_drift(name, timeout=timeout)]
-    else:
-        reports = check_all_drift(timeout=timeout)
+    reports = [check_drift(name, timeout=timeout)] if name else check_all_drift(timeout=timeout)
 
     if not reports:
         console.print("[yellow]No agents with baselines to check[/yellow]")
@@ -711,8 +708,8 @@ def cmd_team(args: argparse.Namespace) -> None:
 
     if args.team_command == "create":
         team_id = args.id
-        team_name = args.name if args.name else args.id
-        now = datetime.now(timezone.utc)
+        team_name = args.name or args.id
+        now = datetime.now(UTC)
         team = Team(id=team_id, name=team_name, description=args.desc, created_at=now)
         conn = get_connection()
         upsert_team(conn, team)
@@ -847,7 +844,7 @@ def cmd_shadow_scan(args: argparse.Namespace) -> None:
 
 def cmd_shadow_list() -> None:
     """List discovered shadow IT services."""
-    from agent_control_plane.inventory import list_shadow_services, get_shadow_summary
+    from agent_control_plane.inventory import get_shadow_summary, list_shadow_services
 
     conn = get_connection()
     services = list_shadow_services(conn)
@@ -901,7 +898,7 @@ def cmd_shadow_list() -> None:
 
 def cmd_shadow_report() -> None:
     """Show shadow IT risk summary."""
-    from agent_control_plane.inventory import list_shadow_services, get_shadow_summary
+    from agent_control_plane.inventory import get_shadow_summary, list_shadow_services
 
     conn = get_connection()
     services = list_shadow_services(conn)

@@ -2,23 +2,22 @@
 
 from __future__ import annotations
 
-import json
 import os
-import sqlite3
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import pytest
 
 from agent_control_plane.models import (
-    AgentRecord,
-    AgentStatus,
     Team,
     TeamMember,
     User,
     UserRole,
 )
 
+if TYPE_CHECKING:
+    import sqlite3
+    from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Auth module unit tests
@@ -65,10 +64,11 @@ class TestAuth:
 
     def test_validate_expired_session(self):
         """Expired session returns None."""
-        from agent_control_plane.auth import validate_session
-        import time
         import hashlib
         import hmac
+        import time
+
+        from agent_control_plane.auth import validate_session
         old_ts = int(time.time()) - 90000  # > 24h ago
         payload = f"{old_ts}.expired_user"
         sig = hmac.new(b"test", payload.encode(), hashlib.sha256).hexdigest()[:16]
@@ -90,8 +90,9 @@ class TestAuth:
 
     def test_validate_tampered_signature(self):
         """Token with wrong signature returns None."""
-        from agent_control_plane.auth import validate_session
         import time
+
+        from agent_control_plane.auth import validate_session
         ts = int(time.time())
         assert validate_session(f"{ts}.realuser.wrongsig") is None
 
@@ -110,11 +111,9 @@ class TestAuth:
 @pytest.fixture
 def conn(tmp_path: Path) -> sqlite3.Connection:
     """Create temp database for testing."""
-    from agent_control_plane.inventory import _ensure_tables, get_connection
-    from agent_control_plane.config import get_home
+    from agent_control_plane.inventory import get_connection
     os.environ["ACP_HOME"] = str(tmp_path)
-    conn = get_connection()
-    return conn
+    return get_connection()
 
 
 class TestUserCRUD:
@@ -122,7 +121,7 @@ class TestUserCRUD:
         """Insert a user and retrieve by name."""
         from agent_control_plane.inventory import get_user, upsert_user
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         user = User(name="testuser", email="test@example.com", role=UserRole.ADMIN,
                      api_key_hash="abc123", created_at=now)
         upsert_user(conn, user)
@@ -137,7 +136,7 @@ class TestUserCRUD:
         """Get user by email."""
         from agent_control_plane.inventory import get_user_by_email, upsert_user
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         user = User(name="emailuser", email="email@test.com", created_at=now)
         upsert_user(conn, user)
 
@@ -149,7 +148,7 @@ class TestUserCRUD:
         """List all users."""
         from agent_control_plane.inventory import list_users, upsert_user
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         upsert_user(conn, User(name="user1", email="u1@t.com", created_at=now))
         upsert_user(conn, User(name="user2", email="u2@t.com", created_at=now))
 
@@ -167,7 +166,7 @@ class TestUserCRUD:
             upsert_user,
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         upsert_user(conn, User(name="deletable", email="del@t.com", created_at=now))
         upsert_team(conn, Team(id="team1", name="Team 1", created_at=now))
         add_team_member(conn, TeamMember(user_name="deletable", team_id="team1"))
@@ -186,7 +185,7 @@ class TestUserCRUD:
         """check_single_user_mode returns False when users exist."""
         from agent_control_plane.inventory import check_single_user_mode, upsert_user
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         upsert_user(conn, User(name="someone", email="s@t.com", created_at=now))
         assert check_single_user_mode(conn) is False
 
@@ -196,7 +195,7 @@ class TestTeamCRUD:
         """Insert a team and retrieve it."""
         from agent_control_plane.inventory import get_team, upsert_team
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         upsert_team(conn, Team(id="infra", name="Infrastructure", description="Infra team", created_at=now))
 
         team = get_team(conn, "infra")
@@ -207,7 +206,7 @@ class TestTeamCRUD:
         """List all teams."""
         from agent_control_plane.inventory import list_teams, upsert_team
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         upsert_team(conn, Team(id="t1", name="Team 1", created_at=now))
         upsert_team(conn, Team(id="t2", name="Team 2", created_at=now))
 
@@ -218,11 +217,10 @@ class TestTeamCRUD:
         """Deleting a team unassigns its agents."""
         from agent_control_plane.inventory import (
             delete_team,
-            assign_agent_to_team,
             upsert_team,
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         upsert_team(conn, Team(id="delteam", name="To Delete", created_at=now))
         conn.execute(
             "INSERT INTO agents (name, url, provider, status, tags, team_id, first_seen, last_seen) "
@@ -246,7 +244,7 @@ class TestTeamCRUD:
             upsert_user,
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         upsert_user(conn, User(name="member1", email="m@t.com", created_at=now))
         upsert_team(conn, Team(id="mt", name="Member Team", created_at=now))
         add_team_member(conn, TeamMember(user_name="member1", team_id="mt",
@@ -267,7 +265,7 @@ class TestTeamCRUD:
             unassign_agent_from_team,
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         conn.execute(
             "INSERT INTO agents (name, url, provider, status, tags, first_seen, last_seen) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -290,7 +288,7 @@ class TestTeamScopedQueries:
         """list_agents respects team_id filter."""
         from agent_control_plane.inventory import list_agents
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn.execute(
             "INSERT INTO agents (name, url, provider, status, tags, team_id, first_seen, last_seen) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -316,7 +314,7 @@ class TestTeamScopedQueries:
         """Empty team_ids returns no agents."""
         from agent_control_plane.inventory import list_agents
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn.execute(
             "INSERT INTO agents (name, url, provider, status, tags, team_id, first_seen, last_seen) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -336,7 +334,7 @@ class TestTeamScopedQueries:
         )
         from agent_control_plane.models import UserRole
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         upsert_user(conn, User(name="bigcheese", email="boss@t.com",
                                 role=UserRole.ADMIN, created_at=now))
         team_ids = get_user_team_ids(conn, "bigcheese")
@@ -352,7 +350,7 @@ class TestTeamScopedQueries:
         )
         from agent_control_plane.models import UserRole
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         upsert_user(conn, User(name="opuser", email="op@t.com",
                                 role=UserRole.OPERATOR, created_at=now))
         upsert_team(conn, Team(id="op-team", name="OP Team", created_at=now))
@@ -377,7 +375,7 @@ class TestTeamScopedQueries:
             upsert_user,
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         upsert_user(conn, User(name="teamuser", email="tu@t.com", created_at=now))
         upsert_team(conn, Team(id="team-x", name="Team X", created_at=now))
         upsert_team(conn, Team(id="team-y", name="Team Y", created_at=now))
@@ -398,8 +396,8 @@ class TestAuthIntegration:
         import os
         os.environ["ACP_HOME"] = str(tmp_path)
         from agent_control_plane.auth import (
-            authenticate_email,
             authenticate_api_key,
+            authenticate_email,
             create_user_with_key,
         )
 
@@ -480,8 +478,9 @@ class TestDashboardAuthAPI:
         import os
         os.environ["ACP_HOME"] = str(tmp_path)
 
-        from agent_control_plane.dashboard import create_app
         from fastapi.testclient import TestClient
+
+        from agent_control_plane.dashboard import create_app
         app = create_app()
         return TestClient(app)
 
@@ -505,7 +504,7 @@ class TestDashboardAuthAPI:
         """Full login flow via API."""
         from agent_control_plane.auth import create_user_with_key
 
-        user, api_key = create_user_with_key("api-test", "api@test.com", role="operator")
+        _user, api_key = create_user_with_key("api-test", "api@test.com", role="operator")
 
         # Login
         res = client.post("/api/login",

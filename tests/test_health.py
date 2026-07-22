@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Generator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from threading import Thread
+from typing import TYPE_CHECKING
 
 import pytest
 
 from agent_control_plane.models import AgentEndpoint, AgentStatus
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 
 class _HealthHandler(BaseHTTPRequestHandler):
@@ -73,7 +76,7 @@ class TestCheckAgentHealth:
         """Unreachable agent returns OFFLINE."""
         from agent_control_plane.health import check_agent_health
         endpoint = AgentEndpoint(name="offline", url="http://127.0.0.1:1")
-        status, elapsed, code, error = check_agent_health(endpoint, timeout=1)
+        status, _elapsed, _code, error = check_agent_health(endpoint, timeout=1)
         assert status == AgentStatus.OFFLINE
         assert error is not None
 
@@ -84,7 +87,7 @@ class TestCheckAgentHealth:
             name="err-agent", url=f"http://127.0.0.1:{health_port}",
             health_check_path="/error",
         )
-        status, elapsed, code, error = check_agent_health(endpoint)
+        status, _elapsed, code, _error = check_agent_health(endpoint)
         assert status == AgentStatus.OFFLINE
         assert code == 500
 
@@ -95,7 +98,7 @@ class TestCheckAgentHealth:
             name="slow", url=f"http://127.0.0.1:{health_port}",
             health_check_path="/slow",
         )
-        status, elapsed, code, error = check_agent_health(endpoint, timeout=1)
+        status, _elapsed, _code, error = check_agent_health(endpoint, timeout=1)
         assert status == AgentStatus.OFFLINE
         assert error == "timeout"
 

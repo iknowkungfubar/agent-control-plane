@@ -8,12 +8,9 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import os
 import secrets
 import time
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 from agent_control_plane.inventory import (
     check_single_user_mode,
@@ -72,6 +69,7 @@ def create_user_with_key(
     Returns:
         Tuple of (User, plaintext_api_key).
         The plaintext key is shown once and cannot be retrieved later.
+
     """
     api_key = generate_api_key()
     key_hash = hash_api_key(api_key)
@@ -81,7 +79,7 @@ def create_user_with_key(
         email=email,
         role=UserRole(role),
         api_key_hash=key_hash,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
 
     conn = get_connection()
@@ -158,7 +156,7 @@ def create_session(user_name: str) -> str:
     timestamp = int(time.time())
     payload = f"{timestamp}.{user_name}"
     signature = hmac.new(
-        secret.encode(), payload.encode(), hashlib.sha256
+        secret.encode(), payload.encode(), hashlib.sha256,
     ).hexdigest()[:16]
     return f"{payload}.{signature}"
 
@@ -186,7 +184,7 @@ def validate_session(token: str) -> str | None:
     # Verify signature
     payload = f"{timestamp_str}.{user_name}"
     expected = hmac.new(
-        secret.encode(), payload.encode(), hashlib.sha256
+        secret.encode(), payload.encode(), hashlib.sha256,
     ).hexdigest()[:16]
     if not hmac.compare_digest(signature, expected):
         return None

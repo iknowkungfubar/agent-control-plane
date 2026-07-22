@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 
-class AgentStatus(str, Enum):
+class AgentStatus(StrEnum):
     """Health status of an agent endpoint."""
 
     UNKNOWN = "unknown"
@@ -89,7 +89,7 @@ class CostRecord:
     last_updated: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
-class UserRole(str, Enum):
+class UserRole(StrEnum):
     """Role for a user in the system."""
 
     ADMIN = "admin"
@@ -155,7 +155,7 @@ class DriftCheckResult:
     checked_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
-class DriftSeverity(str, Enum):
+class DriftSeverity(StrEnum):
     """Severity of configuration drift."""
 
     NONE = "none"
@@ -204,7 +204,7 @@ class SummaryStats:
     total_checks_run: int
 
 
-class ShadowRisk(str, Enum):
+class ShadowRisk(StrEnum):
     """Risk level for a discovered shadow IT service."""
 
     CRITICAL = "critical"  # Data exfiltration risk, no auth
@@ -214,7 +214,7 @@ class ShadowRisk(str, Enum):
     UNKNOWN = "unknown"
 
 
-class ShadowCategory(str, Enum):
+class ShadowCategory(StrEnum):
     """Category of shadow IT service."""
 
     AI_API = "ai-api"

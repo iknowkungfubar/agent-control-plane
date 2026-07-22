@@ -13,12 +13,15 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import Generator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from threading import Thread
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 # Path to the CLI we're testing
 CLI_ENTRY = [sys.executable, "-m", "agent_control_plane.cli"]

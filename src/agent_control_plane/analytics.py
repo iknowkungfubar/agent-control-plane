@@ -6,9 +6,11 @@ Supports hour / day / week granularity with configurable lookback windows.
 
 from __future__ import annotations
 
-import sqlite3
 from datetime import UTC
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import sqlite3
 
 
 def get_health_timeseries(
@@ -163,7 +165,7 @@ def _validate_bucket(bucket: str) -> None:
     """Warn on invalid bucket (silently default to 'day' for resilience)."""
     if bucket not in ("hour", "day", "week"):
         import warnings
-        warnings.warn(f"Invalid bucket: '{bucket}'. Defaulting to 'day'.")
+        warnings.warn(f"Invalid bucket: '{bucket}'. Defaulting to 'day'.", stacklevel=2)
 
 
 def _bucket_format(bucket: str) -> str:

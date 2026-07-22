@@ -20,7 +20,7 @@ FINGERPRINT_DB: list[dict] = [
         "name": "OpenAI API",
         "category": ShadowCategory.AI_API,
         "paths": ["/v1/models", "/v1/chat/completions"],
-        "body_patterns": ["gpt-4", "gpt-3.5", "data.openai.com", "object\": \"list\""],
+        "body_patterns": ["gpt-4", "gpt-3.5", "data.openai.com", 'object": "list"'],
         "header_patterns": {"server": "openai", "openai-organization": ""},
         "port_hints": [443, 80],
         "risk": ShadowRisk.MEDIUM,

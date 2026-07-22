@@ -10,14 +10,17 @@ import json
 import os
 import threading
 import time
-from collections.abc import Generator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 import yaml
 
 from agent_control_plane.models import AgentStatus
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 
 class _WebhookCatcher(BaseHTTPRequestHandler):
@@ -247,8 +250,8 @@ class TestNotificationService:
 
     def test_notification_history_recorded(self):
         """Send notification records delivery in notification_history."""
-        from agent_control_plane.notifications.service import send_notification
         from agent_control_plane.inventory import get_connection
+        from agent_control_plane.notifications.service import send_notification
 
         send_notification(
             alert_type="DOWN",
@@ -339,7 +342,7 @@ class TestNotificationService:
         from agent_control_plane.cli import cmd_notify_test
 
         # Should not raise
-        result = cmd_notify_test(
+        cmd_notify_test(
             agent_name="test-agent",
             webhook_url=f"http://127.0.0.1:{webhook_server}/test",
         )

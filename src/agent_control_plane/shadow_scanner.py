@@ -8,11 +8,8 @@ inventory catalog.
 from __future__ import annotations
 
 import ipaddress
-import json
 import socket
-import time
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -25,8 +22,6 @@ from agent_control_plane.fingerprints import (
 )
 from agent_control_plane.inventory import (
     get_connection,
-    get_shadow_summary,
-    list_shadow_services,
     upsert_shadow_service,
 )
 from agent_control_plane.models import ShadowRisk, ShadowService
@@ -37,7 +32,7 @@ def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return True
-    except (socket.timeout, ConnectionRefusedError, OSError):
+    except (TimeoutError, ConnectionRefusedError, OSError):
         return False
 
 
@@ -63,7 +58,6 @@ def probe_service(
     paths_to_try = list(dict.fromkeys(paths_to_try))  # Dedupe preserving order
 
     last_body = ""
-    last_headers: dict[str, str] = {}
     last_status = 0
 
     for path in paths_to_try:
@@ -72,7 +66,7 @@ def probe_service(
             with httpx.Client(timeout=timeout) as client:
                 resp = client.get(url, follow_redirects=False)
             last_body = resp.text
-            last_headers = dict(resp.headers)
+            dict(resp.headers)
             last_status = resp.status_code
 
             # Try to match
@@ -131,6 +125,7 @@ def scan_cidr(
 
     Returns:
         List of discovery result dicts.
+
     """
     if ports is None:
         ports = sorted(get_all_ports())
@@ -174,6 +169,7 @@ def scan_host(
 
     Returns:
         List of discovery result dicts.
+
     """
     if ports is None:
         ports = sorted(get_all_ports())
@@ -194,9 +190,10 @@ def register_shadow_discovery(results: list[dict[str, Any]]) -> int:
 
     Returns:
         Number of new records created.
+
     """
     conn = get_connection()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     count = 0
 
     for r in results:
@@ -227,7 +224,7 @@ def register_shadow_discovery(results: list[dict[str, Any]]) -> int:
 def classify_risk_for_result(result: dict[str, Any]) -> str:
     """Determine risk level for a discovered service."""
     service_type = result.get("service_type", "unknown")
-    name = result.get("name", "")
+    result.get("name", "")
     status_code = result.get("status_code", 0)
 
     # Services responding with 200 on unknown ports are HIGH risk

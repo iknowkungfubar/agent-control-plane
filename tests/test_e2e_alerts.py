@@ -11,14 +11,17 @@ import json
 import os
 import threading
 import time
-from collections.abc import Generator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 import yaml
 
 from agent_control_plane.models import AgentStatus
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 
 class _WebhookCatcher(BaseHTTPRequestHandler):

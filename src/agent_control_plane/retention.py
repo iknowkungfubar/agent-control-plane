@@ -7,7 +7,10 @@ to prevent unbounded database growth.
 from __future__ import annotations
 
 import os
-import sqlite3
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import sqlite3
 
 
 def enforce_retention(conn: sqlite3.Connection, retention_days: int | None = None) -> int:

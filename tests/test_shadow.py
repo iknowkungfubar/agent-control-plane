@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-import json
 import os
-import sqlite3
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import pytest
 
-from agent_control_plane.models import ShadowRisk, ShadowService
+from agent_control_plane.models import ShadowService
 
+if TYPE_CHECKING:
+    import sqlite3
+    from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Fingerprint database tests
@@ -137,7 +138,7 @@ class TestShadowServiceModel:
 
     def test_shadow_service_with_all_fields(self):
         """ShadowService accepts all fields."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         svc = ShadowService(
             id=1, name="Ollama", url="http://localhost:11434",
             service_type="self-hosted-llm", risk="critical",
@@ -160,7 +161,6 @@ class TestShadowServiceModel:
 @pytest.fixture
 def conn(tmp_path: Path) -> sqlite3.Connection:
     """Create temp database for testing."""
-    import os
     from agent_control_plane.inventory import get_connection
     os.environ["ACP_HOME"] = str(tmp_path)
     return get_connection()
@@ -273,7 +273,6 @@ class TestShadowCatalogCRUD:
 class TestShadowDashboardAPI:
     @pytest.fixture
     def client(self, tmp_path):
-        import os
         os.environ["ACP_HOME"] = str(tmp_path)
 
         # Seed some shadow data
@@ -286,8 +285,9 @@ class TestShadowDashboardAPI:
         ))
         conn.close()
 
-        from agent_control_plane.dashboard import create_app
         from fastapi.testclient import TestClient
+
+        from agent_control_plane.dashboard import create_app
         return TestClient(create_app())
 
     def test_shadow_endpoint(self, client):

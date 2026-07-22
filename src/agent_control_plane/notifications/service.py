@@ -49,6 +49,7 @@ def send_notification(
     Returns:
         List of delivery result dicts, one per channel, each with keys:
         channel, success, status_code, error.
+
     """
     if enabled_channels is None:
         from agent_control_plane.alerts.rules import load_alert_config
@@ -173,6 +174,7 @@ def get_notification_history(
 
     Returns:
         List of notification history dicts.
+
     """
     conn = get_connection()
     conditions: list[str] = []
@@ -205,16 +207,16 @@ def get_notification_summary() -> dict[str, Any]:
     """Get notification summary counts."""
     conn = get_connection()
     rows = conn.execute(
-        "SELECT channel, COUNT(*) as cnt FROM notification_history WHERE success = 1 GROUP BY channel"
+        "SELECT channel, COUNT(*) as cnt FROM notification_history WHERE success = 1 GROUP BY channel",
     ).fetchall()
     by_channel: dict[str, int] = {r["channel"]: r["cnt"] for r in rows}
 
     fail_row = conn.execute(
-        "SELECT COUNT(*) as cnt FROM notification_history WHERE success = 0"
+        "SELECT COUNT(*) as cnt FROM notification_history WHERE success = 0",
     ).fetchone()
 
     total_row = conn.execute(
-        "SELECT COUNT(*) as cnt FROM notification_history"
+        "SELECT COUNT(*) as cnt FROM notification_history",
     ).fetchone()
     conn.close()
 
@@ -241,6 +243,7 @@ def send_test_notification(
 
     Returns:
         List of delivery result dicts.
+
     """
     channels: dict[str, dict[str, Any]] = {}
 

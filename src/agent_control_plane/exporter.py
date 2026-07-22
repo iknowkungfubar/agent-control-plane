@@ -5,8 +5,7 @@ from __future__ import annotations
 import csv
 import json
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from agent_control_plane.inventory import (
     get_connection,
@@ -14,6 +13,9 @@ from agent_control_plane.inventory import (
     list_agents,
     list_cost_records,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def build_export_data(db_path: Path | None = None) -> dict[str, Any]:

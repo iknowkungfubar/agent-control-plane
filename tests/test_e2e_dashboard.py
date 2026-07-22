@@ -8,13 +8,17 @@ from __future__ import annotations
 
 import os
 import tempfile
-from collections.abc import Generator
 from datetime import UTC
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 import yaml
-from starlette.testclient import TestClient
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
+    from starlette.testclient import TestClient
 
 
 @pytest.fixture(scope="module")

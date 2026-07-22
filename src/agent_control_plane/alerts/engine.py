@@ -89,7 +89,7 @@ def evaluate_alerts(agent_name: str, new_status: AgentStatus) -> list[dict[str, 
 
     rules = get_agent_alert_rules(agent_name)
     threshold = rules.get("consecutive_failures", cfg.get("global", {}).get("consecutive_failures", 3))
-    rate_limit = rules.get("rate_limit_seconds", cfg.get("global", {}).get("rate_limit_seconds", 300))
+    rules.get("rate_limit_seconds", cfg.get("global", {}).get("rate_limit_seconds", 300))
 
     now = datetime.now(UTC).isoformat()
 

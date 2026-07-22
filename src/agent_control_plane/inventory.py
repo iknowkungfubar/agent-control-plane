@@ -5,8 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from agent_control_plane.models import (
     AgentRecord,
@@ -21,6 +20,9 @@ from agent_control_plane.models import (
     User,
     UserRole,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _ensure_tables(conn: sqlite3.Connection) -> None:
@@ -185,7 +187,7 @@ def get_connection(db_path: Path | None = None) -> sqlite3.Connection:
 
 def upsert_agent(conn: sqlite3.Connection, agent: AgentRecord) -> None:
     """Insert or update an agent record."""
-    now = datetime.now(UTC).isoformat()
+    datetime.now(UTC).isoformat()
     conn.execute(
         """
         INSERT INTO agents (name, url, provider, status, tags, first_seen, last_seen,
@@ -231,7 +233,7 @@ def get_user_team_ids(conn: sqlite3.Connection, user_name: str) -> list[str]:
     if user is None or user.role == UserRole.ADMIN:
         return []  # Empty means no filter (admin sees all)
     rows = conn.execute(
-        "SELECT team_id FROM team_members WHERE user_name = ?", (user_name,)
+        "SELECT team_id FROM team_members WHERE user_name = ?", (user_name,),
     ).fetchall()
     return [r["team_id"] for r in rows]
 
@@ -246,6 +248,7 @@ def list_agents(
         conn: Database connection.
         team_ids: If provided, only agents in these teams are returned.
                   If empty list or None, all agents are returned.
+
     """
     if team_ids is not None:
         if not team_ids:
@@ -280,7 +283,7 @@ def _row_to_agent(row: sqlite3.Row) -> AgentRecord:
         total_checks=row["total_checks"],
         successful_checks=row["successful_checks"],
         avg_response_time_ms=row["avg_response_time_ms"],
-        team_id=row["team_id"] if row["team_id"] else None,
+        team_id=row["team_id"] or None,
     )
 
 
@@ -524,7 +527,7 @@ def get_drift_history(
 def get_drift_summary(conn: sqlite3.Connection) -> dict[str, int]:
     """Get summary counts of drift events by severity."""
     rows = conn.execute(
-        "SELECT severity, COUNT(*) as cnt FROM drift_log GROUP BY severity"
+        "SELECT severity, COUNT(*) as cnt FROM drift_log GROUP BY severity",
     ).fetchall()
     summary: dict[str, int] = {}
     for r in rows:
@@ -590,7 +593,7 @@ def _row_to_user(row: sqlite3.Row) -> User:
         name=row["name"],
         email=row["email"],
         role=UserRole(row["role"]),
-        api_key_hash=row["api_key_hash"] if row["api_key_hash"] else "",
+        api_key_hash=row["api_key_hash"] or "",
         created_at=datetime.fromisoformat(row["created_at"]),
         last_seen=datetime.fromisoformat(row["last_seen"]) if row["last_seen"] else None,
     )
@@ -666,7 +669,7 @@ def remove_team_member(conn: sqlite3.Connection, user_name: str, team_id: str) -
 def list_team_members(conn: sqlite3.Connection, team_id: str) -> list[TeamMember]:
     """List all members of a team."""
     rows = conn.execute(
-        "SELECT * FROM team_members WHERE team_id = ? ORDER BY user_name", (team_id,)
+        "SELECT * FROM team_members WHERE team_id = ? ORDER BY user_name", (team_id,),
     ).fetchall()
     return [
         TeamMember(user_name=r["user_name"], team_id=r["team_id"],
@@ -732,19 +735,18 @@ def upsert_shadow_service(conn: sqlite3.Connection, svc: ShadowService) -> int:
         )
         conn.commit()
         return existing["id"]
-    else:
-        cursor = conn.execute(
-            """INSERT INTO shadow_catalog
+    cursor = conn.execute(
+        """INSERT INTO shadow_catalog
                (name, url, service_type, risk, host, port, discovered_by,
                 first_seen, last_seen, tags, metadata)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (svc.name, svc.url, svc.service_type, svc.risk,
-             svc.host, svc.port, svc.discovered_by,
-             svc.first_seen.isoformat(), svc.last_seen.isoformat(),
-             json.dumps(svc.tags), json.dumps(svc.metadata)),
-        )
-        conn.commit()
-        return cursor.lastrowid
+        (svc.name, svc.url, svc.service_type, svc.risk,
+         svc.host, svc.port, svc.discovered_by,
+         svc.first_seen.isoformat(), svc.last_seen.isoformat(),
+         json.dumps(svc.tags), json.dumps(svc.metadata)),
+    )
+    conn.commit()
+    return cursor.lastrowid
 
 
 def list_shadow_services(
@@ -776,7 +778,7 @@ def list_shadow_services(
 def get_shadow_service(conn: sqlite3.Connection, service_id: int) -> ShadowService | None:
     """Get a single shadow service by ID."""
     row = conn.execute(
-        "SELECT * FROM shadow_catalog WHERE id = ?", (service_id,)
+        "SELECT * FROM shadow_catalog WHERE id = ?", (service_id,),
     ).fetchone()
     return _row_to_shadow(row) if row else None
 
@@ -791,14 +793,14 @@ def get_shadow_summary(conn: sqlite3.Connection) -> dict[str, Any]:
     """Get shadow IT summary counts by risk level and type."""
     by_risk: dict[str, int] = {}
     rows = conn.execute(
-        "SELECT risk, COUNT(*) as cnt FROM shadow_catalog GROUP BY risk"
+        "SELECT risk, COUNT(*) as cnt FROM shadow_catalog GROUP BY risk",
     ).fetchall()
     for r in rows:
         by_risk[r["risk"]] = r["cnt"]
 
     by_type: dict[str, int] = {}
     rows = conn.execute(
-        "SELECT service_type, COUNT(*) as cnt FROM shadow_catalog GROUP BY service_type"
+        "SELECT service_type, COUNT(*) as cnt FROM shadow_catalog GROUP BY service_type",
     ).fetchall()
     for r in rows:
         by_type[r["service_type"]] = r["cnt"]

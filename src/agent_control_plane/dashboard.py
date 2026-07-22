@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 from agent_control_plane.analytics import (
     get_cost_timeseries,
@@ -131,19 +131,19 @@ def create_app() -> FastAPI:
     def admin_page():
         """Admin panel (minimal)."""
         # Read the admin template or just inline it
-        return HTMLResponse(content=f"""<!DOCTYPE html>
+        return HTMLResponse(content="""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><title>Admin — ACP</title>
 <style>
-  *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  :root {{ --bg: #0f1117; --bg-card: #1a1d27; --text: #e1e4ed; --text-dim: #8b8fa3; --border: #2a2d3a; --accent: #6366f1; }}
-  body {{ font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 2rem; }}
-  h1 {{ margin-bottom: 1.5rem; }}
-  table {{ width: 100%; border-collapse: collapse; background: var(--bg-card); border-radius: 8px; overflow: hidden; }}
-  th, td {{ padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }}
-  th {{ font-size: 0.75rem; text-transform: uppercase; color: var(--text-dim); }}
-  a {{ color: var(--accent); text-decoration: none; }}
-  .section {{ margin-bottom: 2rem; }}
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { --bg: #0f1117; --bg-card: #1a1d27; --text: #e1e4ed; --text-dim: #8b8fa3; --border: #2a2d3a; --accent: #6366f1; }
+  body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 2rem; }
+  h1 { margin-bottom: 1.5rem; }
+  table { width: 100%; border-collapse: collapse; background: var(--bg-card); border-radius: 8px; overflow: hidden; }
+  th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { font-size: 0.75rem; text-transform: uppercase; color: var(--text-dim); }
+  a { color: var(--accent); text-decoration: none; }
+  .section { margin-bottom: 2rem; }
 </style></head>
 <body>
   <h1>Admin Panel</h1>
@@ -159,8 +159,8 @@ def create_app() -> FastAPI:
   </div>
   <p><a href="/">← Back to Dashboard</a></p>
   <script>
-    async function loadAdmin() {{
-      try {{
+    async function loadAdmin() {
+      try {
         const [usersRes, teamsRes] = await Promise.all([
           fetch('/api/admin/users'),
           fetch('/api/admin/teams'),
@@ -168,21 +168,21 @@ def create_app() -> FastAPI:
         const users = await usersRes.json();
         const teams = await teamsRes.json();
         const usersBody = document.getElementById('users-tbody');
-        if (users.users && users.users.length > 0) {{
-          usersBody.innerHTML = users.users.map(u => `<tr><td>${{u.name}}</td><td>${{u.email}}</td><td>${{u.role}}</td><td>${{u.created_at?.slice(0,10) || ''}}</td></tr>`).join('');
-        }} else {{
+        if (users.users && users.users.length > 0) {
+          usersBody.innerHTML = users.users.map(u => `<tr><td>${u.name}</td><td>${u.email}</td><td>${u.role}</td><td>${u.created_at?.slice(0,10) || ''}</td></tr>`).join('');
+        } else {
           usersBody.innerHTML = '<tr><td colspan="4" class="empty">No users</td></tr>';
-        }}
+        }
         const teamsBody = document.getElementById('teams-tbody');
-        if (teams.teams && teams.teams.length > 0) {{
-          teamsBody.innerHTML = teams.teams.map(t => `<tr><td>${{t.id}}</td><td>${{t.name}}</td><td>${{t.description}}</td><td>${{t.member_count || 0}}</td></tr>`).join('');
-        }} else {{
+        if (teams.teams && teams.teams.length > 0) {
+          teamsBody.innerHTML = teams.teams.map(t => `<tr><td>${t.id}</td><td>${t.name}</td><td>${t.description}</td><td>${t.member_count || 0}</td></tr>`).join('');
+        } else {
           teamsBody.innerHTML = '<tr><td colspan="4" class="empty">No teams</td></tr>';
-        }}
-      }} catch(e) {{
+        }
+      } catch(e) {
         document.getElementById('users-tbody').innerHTML = '<tr><td colspan="4" class="error">Failed to load</td></tr>';
-      }}
-    }}
+      }
+    }
     loadAdmin();
   </script>
 </body></html>""")
@@ -240,7 +240,7 @@ def create_app() -> FastAPI:
                     "first_seen": s.first_seen.isoformat() if s.first_seen else None,
                 }
                 for s in services
-            ]
+            ],
         }
 
     @app.get("/api/shadow/summary")
@@ -527,8 +527,9 @@ def create_app() -> FastAPI:
     async def api_update_notification_settings(request: Request):
         """Update notification channel configuration."""
         import yaml
-        from agent_control_plane.config import _resolve_config_path
+
         from agent_control_plane.alerts.engine import _reset_config_cache
+        from agent_control_plane.config import _resolve_config_path
 
         body = await request.json()
         cfg_path = _resolve_config_path()
@@ -623,5 +624,4 @@ def serve_dashboard(host: str = "127.0.0.1", port: int = 8337) -> None:
     """Start the dashboard server."""
     import uvicorn
     app = create_app()
-    print(f"  Agent Control Plane Dashboard → http://{host}:{port}")
     uvicorn.run(app, host=host, port=port, log_level="info")

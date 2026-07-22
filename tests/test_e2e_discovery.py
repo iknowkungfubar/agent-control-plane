@@ -11,12 +11,15 @@ import os
 import socket
 import threading
 import time
-from collections.abc import Generator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 import yaml
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 TEST_PROVIDER_PORTS: dict[str, int] = {}
 
@@ -70,7 +73,7 @@ class _MCPStdioHandler(BaseHTTPRequestHandler):
     """Simulates a basic MCP server endpoint."""
 
     def do_GET(self):
-        if self.path == "/mcp" or self.path == "/":
+        if self.path in {"/mcp", "/"}:
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             data = json.dumps({

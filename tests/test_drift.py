@@ -6,7 +6,7 @@ import json
 import os
 import sqlite3
 from datetime import UTC, datetime
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -17,6 +17,9 @@ from agent_control_plane.models import (
     DriftReport,
     DriftSeverity,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Model tests
@@ -610,7 +613,7 @@ class TestDriftE2E:
         from agent_control_plane.models import AgentRecord, AgentStatus
 
         conn = get_connection()
-        now = datetime.now(UTC)
+        datetime.now(UTC)
         upsert_agent(conn, AgentRecord(
             name="e2e-agent",
             url=f"http://127.0.0.1:{health_server}",
@@ -753,7 +756,7 @@ class TestDriftE2E:
         from agent_control_plane.models import AgentRecord, AgentStatus
 
         conn = get_connection()
-        now = datetime.now(UTC)
+        datetime.now(UTC)
         upsert_agent(conn, AgentRecord(
             name="e2e-recapture", url=f"http://127.0.0.1:{health_server}",
             provider="openai", status=AgentStatus.ONLINE, tags=[],
@@ -1015,7 +1018,7 @@ class TestCLIDriftCommands:
         from agent_control_plane.models import AgentRecord, AgentStatus
 
         conn = get_connection()
-        now = datetime.now(UTC)
+        datetime.now(UTC)
         upsert_agent(conn, AgentRecord(
             name="cli-baseline-agent", url="http://localhost:1",
             provider="openai", status=AgentStatus.ONLINE, tags=["test"],

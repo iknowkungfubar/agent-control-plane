@@ -86,7 +86,7 @@ class TestAgentCRUD:
 
     def test_agent_default_values(self):
         """AgentRecord gets correct defaults."""
-        now = datetime.now(UTC)
+        datetime.now(UTC)
         agent = AgentRecord(name="defaults-test", url="http://localhost:9999", provider="custom")
         assert agent.status == AgentStatus.UNKNOWN
         assert agent.tags == []
