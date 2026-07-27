@@ -23,12 +23,22 @@ class TestFingerprintDB:
     def test_fingerprint_db_has_entries(self):
         """Fingerprint DB has 100+ entries."""
         from agent_control_plane.fingerprints import FINGERPRINT_DB
+
         assert len(FINGERPRINT_DB) >= 40  # 40+ fingerprint entries
 
     def test_each_fingerprint_has_required_fields(self):
         """Each fingerprint has name, category, paths, risk."""
         from agent_control_plane.fingerprints import FINGERPRINT_DB
-        required = {"name", "category", "paths", "body_patterns", "header_patterns", "port_hints", "risk"}
+
+        required = {
+            "name",
+            "category",
+            "paths",
+            "body_patterns",
+            "header_patterns",
+            "port_hints",
+            "risk",
+        }
         for fp in FINGERPRINT_DB:
             for field in required:
                 assert field in fp, f"Missing {field} in {fp.get('name', 'unknown')}"
@@ -36,18 +46,21 @@ class TestFingerprintDB:
     def test_get_fingerprints_by_category(self):
         """Filtering by category works."""
         from agent_control_plane.fingerprints import get_fingerprints_by_category
+
         ai_apis = get_fingerprints_by_category("ai-api")
         assert len(ai_apis) >= 5
 
     def test_get_fingerprints_by_port(self):
         """Filtering by port works."""
         from agent_control_plane.fingerprints import get_fingerprints_by_port
+
         ollama_ports = get_fingerprints_by_port(11434)
         assert any("Ollama" in f["name"] for f in ollama_ports)
 
     def test_get_all_ports(self):
         """All ports returns a set of ints."""
         from agent_control_plane.fingerprints import get_all_ports
+
         ports = get_all_ports()
         assert len(ports) >= 10
         assert all(isinstance(p, int) for p in ports)
@@ -55,6 +68,7 @@ class TestFingerprintDB:
     def test_classify_risk_defaults(self):
         """Classify risk returns expected defaults."""
         from agent_control_plane.fingerprints import classify_risk
+
         assert classify_risk("self-hosted-llm") == "critical"
         assert classify_risk("mcp-server") == "high"
         assert classify_risk("ai-dev-tool") == "low"
@@ -64,12 +78,14 @@ class TestFingerprintDB:
     def test_classify_risk_auth_adjusts_down(self):
         """Auth-required services get lower risk."""
         from agent_control_plane.fingerprints import classify_risk
+
         assert classify_risk("self-hosted-llm", auth_required=True) == "medium"
         assert classify_risk("mcp-server", auth_required=True) == "medium"
 
     def test_match_fingerprint_openai(self):
         """Match fingerprint detects OpenAI-compatible API."""
         from agent_control_plane.fingerprints import match_fingerprint
+
         result = match_fingerprint(
             url="http://localhost:8000/v1/models",
             status_code=200,
@@ -85,6 +101,7 @@ class TestMatchFingerprint:
     def test_match_vllm(self):
         """Match fingerprint detects vLLM via body and header."""
         from agent_control_plane.fingerprints import match_fingerprint
+
         result = match_fingerprint(
             url="http://localhost:8000/health",
             status_code=200,
@@ -98,6 +115,7 @@ class TestMatchFingerprint:
     def test_match_ollama(self):
         """Match fingerprint detects Ollama."""
         from agent_control_plane.fingerprints import match_fingerprint
+
         result = match_fingerprint(
             url="http://localhost:11434/api/tags",
             status_code=200,
@@ -111,6 +129,7 @@ class TestMatchFingerprint:
     def test_no_match_unknown(self):
         """No match returns None for unrecognized services."""
         from agent_control_plane.fingerprints import match_fingerprint
+
         result = match_fingerprint(
             url="http://localhost:9999/",
             status_code=200,
@@ -140,11 +159,16 @@ class TestShadowServiceModel:
         """ShadowService accepts all fields."""
         now = datetime.now(UTC)
         svc = ShadowService(
-            id=1, name="Ollama", url="http://localhost:11434",
-            service_type="self-hosted-llm", risk="critical",
-            host="localhost", port=11434,
+            id=1,
+            name="Ollama",
+            url="http://localhost:11434",
+            service_type="self-hosted-llm",
+            risk="critical",
+            host="localhost",
+            port=11434,
             discovered_by="port_scan",
-            first_seen=now, last_seen=now,
+            first_seen=now,
+            last_seen=now,
             tags=["llm", "shadow"],
             metadata={"version": "0.1"},
         )
@@ -162,6 +186,7 @@ class TestShadowServiceModel:
 def conn(tmp_path: Path) -> sqlite3.Connection:
     """Create temp database for testing."""
     from agent_control_plane.inventory import get_connection
+
     os.environ["ACP_HOME"] = str(tmp_path)
     return get_connection()
 
@@ -172,9 +197,12 @@ class TestShadowCatalogCRUD:
         from agent_control_plane.inventory import list_shadow_services, upsert_shadow_service
 
         svc = ShadowService(
-            name="Local Ollama", url="http://localhost:11434",
-            service_type="self-hosted-llm", risk="critical",
-            host="localhost", port=11434,
+            name="Local Ollama",
+            url="http://localhost:11434",
+            service_type="self-hosted-llm",
+            risk="critical",
+            host="localhost",
+            port=11434,
             discovered_by="port_scan",
         )
         svc_id = upsert_shadow_service(conn, svc)
@@ -189,17 +217,23 @@ class TestShadowCatalogCRUD:
         from agent_control_plane.inventory import list_shadow_services, upsert_shadow_service
 
         svc1 = ShadowService(
-            name="Test", url="http://localhost:8080",
-            service_type="mcp-server", risk="high",
-            host="localhost", port=8080,
+            name="Test",
+            url="http://localhost:8080",
+            service_type="mcp-server",
+            risk="high",
+            host="localhost",
+            port=8080,
             discovered_by="port_scan",
         )
         upsert_shadow_service(conn, svc1)
 
         svc2 = ShadowService(
-            name="Test Updated", url="http://localhost:8080",
-            service_type="mcp-server", risk="medium",
-            host="localhost", port=8080,
+            name="Test Updated",
+            url="http://localhost:8080",
+            service_type="mcp-server",
+            risk="medium",
+            host="localhost",
+            port=8080,
             discovered_by="port_scan",
         )
         upsert_shadow_service(conn, svc2)
@@ -214,12 +248,18 @@ class TestShadowCatalogCRUD:
         from agent_control_plane.inventory import list_shadow_services, upsert_shadow_service
 
         for risk in ("critical", "high", "medium"):
-            upsert_shadow_service(conn, ShadowService(
-                name=f"Test-{risk}", url=f"http://test-{risk}.local",
-                service_type="unknown", risk=risk,
-                host="localhost", port=8080,
-                discovered_by="port_scan",
-            ))
+            upsert_shadow_service(
+                conn,
+                ShadowService(
+                    name=f"Test-{risk}",
+                    url=f"http://test-{risk}.local",
+                    service_type="unknown",
+                    risk=risk,
+                    host="localhost",
+                    port=8080,
+                    discovered_by="port_scan",
+                ),
+            )
 
         critical = list_shadow_services(conn, risk="critical")
         assert len(critical) == 1
@@ -232,12 +272,18 @@ class TestShadowCatalogCRUD:
             upsert_shadow_service,
         )
 
-        svc_id = upsert_shadow_service(conn, ShadowService(
-            name="ToDelete", url="http://delete.me",
-            service_type="unknown", risk="low",
-            host="localhost", port=1,
-            discovered_by="port_scan",
-        ))
+        svc_id = upsert_shadow_service(
+            conn,
+            ShadowService(
+                name="ToDelete",
+                url="http://delete.me",
+                service_type="unknown",
+                risk="low",
+                host="localhost",
+                port=1,
+                discovered_by="port_scan",
+            ),
+        )
         delete_shadow_service(conn, svc_id)
 
         services = list_shadow_services(conn)
@@ -247,16 +293,30 @@ class TestShadowCatalogCRUD:
         """Summary returns counts by risk and type."""
         from agent_control_plane.inventory import get_shadow_summary, upsert_shadow_service
 
-        upsert_shadow_service(conn, ShadowService(
-            name="S1", url="http://a",
-            service_type="self-hosted-llm", risk="critical",
-            host="h", port=1, discovered_by="port_scan",
-        ))
-        upsert_shadow_service(conn, ShadowService(
-            name="S2", url="http://b",
-            service_type="mcp-server", risk="high",
-            host="h", port=2, discovered_by="port_scan",
-        ))
+        upsert_shadow_service(
+            conn,
+            ShadowService(
+                name="S1",
+                url="http://a",
+                service_type="self-hosted-llm",
+                risk="critical",
+                host="h",
+                port=1,
+                discovered_by="port_scan",
+            ),
+        )
+        upsert_shadow_service(
+            conn,
+            ShadowService(
+                name="S2",
+                url="http://b",
+                service_type="mcp-server",
+                risk="high",
+                host="h",
+                port=2,
+                discovered_by="port_scan",
+            ),
+        )
 
         summary = get_shadow_summary(conn)
         assert summary["total"] == 2
@@ -277,17 +337,26 @@ class TestShadowDashboardAPI:
 
         # Seed some shadow data
         from agent_control_plane.inventory import get_connection, upsert_shadow_service
+
         conn = get_connection()
-        upsert_shadow_service(conn, ShadowService(
-            name="API Test", url="http://test:11434",
-            service_type="self-hosted-llm", risk="critical",
-            host="test", port=11434, discovered_by="port_scan",
-        ))
+        upsert_shadow_service(
+            conn,
+            ShadowService(
+                name="API Test",
+                url="http://test:11434",
+                service_type="self-hosted-llm",
+                risk="critical",
+                host="test",
+                port=11434,
+                discovered_by="port_scan",
+            ),
+        )
         conn.close()
 
         from fastapi.testclient import TestClient
 
         from agent_control_plane.dashboard import create_app
+
         return TestClient(create_app())
 
     def test_shadow_endpoint(self, client):
@@ -322,6 +391,7 @@ class TestCLIShadowCommands:
     def test_cli_has_shadow_commands(self):
         """CLI parser recognizes shadow commands."""
         from agent_control_plane.cli import _build_parser
+
         parser = _build_parser()
 
         args = parser.parse_args(["shadow-scan", "--host", "127.0.0.1"])

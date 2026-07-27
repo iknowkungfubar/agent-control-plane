@@ -76,10 +76,12 @@ class _MCPStdioHandler(BaseHTTPRequestHandler):
         if self.path in {"/mcp", "/"}:
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
-            data = json.dumps({
-                "server": {"name": "test-mcp", "version": "1.0.0"},
-                "tools": [{"name": "echo", "description": "Echo input"}],
-            }).encode()
+            data = json.dumps(
+                {
+                    "server": {"name": "test-mcp", "version": "1.0.0"},
+                    "tools": [{"name": "echo", "description": "Echo input"}],
+                }
+            ).encode()
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
@@ -134,6 +136,7 @@ def mcp_server() -> Generator[int, None, None]:
 def _temp_env():
     """Temp ACP_HOME for each test."""
     import tempfile
+
     with tempfile.TemporaryDirectory(prefix="acp_disc_") as tmp:
         old_home = os.environ.get("ACP_HOME")
         old_cfg = os.environ.get("ACP_CONFIG")
@@ -160,11 +163,13 @@ class TestPortScanDiscovery:
 
     def setup_method(self, method):
         from agent_control_plane.discovery.scanner import _clear_cache
+
         _clear_cache()
 
     def test_discover_openai_endpoint(self, openai_server: int):
         """Port scan discovers an OpenAI-compatible endpoint and identifies it."""
         from agent_control_plane.discovery.scanner import probe_endpoint
+
         result = probe_endpoint("127.0.0.1", openai_server)
         assert result is not None
         assert result["name"].startswith("agent-")
@@ -173,14 +178,18 @@ class TestPortScanDiscovery:
     def test_discover_anthropic_endpoint(self, anthropic_server: int):
         """Port scan discovers an Anthropic endpoint."""
         from agent_control_plane.discovery.scanner import probe_endpoint
+
         result = probe_endpoint("127.0.0.1", anthropic_server)
         assert result is not None
 
     def test_scan_port_range_discovers_agents(
-        self, openai_server: int, anthropic_server: int,
+        self,
+        openai_server: int,
+        anthropic_server: int,
     ):
         """Scanning a port range discovers multiple agents."""
         from agent_control_plane.discovery.scanner import scan_ports
+
         ports = [openai_server, anthropic_server]
         results = scan_ports("127.0.0.1", ports)
         assert len(results) >= 2
@@ -188,12 +197,14 @@ class TestPortScanDiscovery:
     def test_scan_closed_port_returns_none(self):
         """Scanning a closed port returns no result."""
         from agent_control_plane.discovery.scanner import probe_endpoint
+
         result = probe_endpoint("127.0.0.1", 1)  # port 1 is closed
         assert result is None
 
     def test_register_discovered_agent(self, openai_server: int):
         """Discovered agent can be registered into inventory."""
         from agent_control_plane.discovery.scanner import probe_endpoint, register_discovered
+
         result = probe_endpoint("127.0.0.1", openai_server)
         assert result is not None
         record = register_discovered(result)
@@ -202,6 +213,7 @@ class TestPortScanDiscovery:
 
         # Verify it's in inventory
         from agent_control_plane.inventory import get_connection, list_agents
+
         conn = get_connection()
         agents = list_agents(conn)
         conn.close()
@@ -214,11 +226,13 @@ class TestMCPDetection:
 
     def setup_method(self, method):
         from agent_control_plane.discovery.scanner import _clear_cache
+
         _clear_cache()
 
     def test_discover_mcp_server(self, mcp_server: int):
         """MCP server is detected via HTTP probe."""
         from agent_control_plane.discovery.scanner import probe_endpoint
+
         result = probe_endpoint("127.0.0.1", mcp_server)
         assert result is not None
         assert "name" in result
@@ -227,6 +241,7 @@ class TestMCPDetection:
     def test_scan_mcp_port_range(self, mcp_server: int):
         """Scanning MCP port ranges discovers MCP servers."""
         from agent_control_plane.discovery.scanner import scan_ports
+
         results = scan_ports("127.0.0.1", [mcp_server])
         assert len(results) >= 1
 
@@ -236,27 +251,36 @@ class TestDiscoveryCLI:
 
     def setup_method(self, method):
         from agent_control_plane.discovery.scanner import _clear_cache
+
         _clear_cache()
 
     def test_discover_cli_basic(self, openai_server: int):
         """CLI discover command scans and reports findings."""
 
         from agent_control_plane.cli import main
+
         rc = main(["discover", "--host", "127.0.0.1", "--ports", str(openai_server)])
         assert rc == 0
 
     def test_discover_with_register(self, openai_server: int):
         """CLI discover --register adds agents to inventory."""
         from agent_control_plane.cli import main
-        rc = main([
-            "discover", "--host", "127.0.0.1",
-            "--ports", str(openai_server),
-            "--register",
-        ])
+
+        rc = main(
+            [
+                "discover",
+                "--host",
+                "127.0.0.1",
+                "--ports",
+                str(openai_server),
+                "--register",
+            ]
+        )
         assert rc == 0
 
         # Verify in inventory
         from agent_control_plane.inventory import get_connection, list_agents
+
         conn = get_connection()
         agents = list_agents(conn)
         conn.close()

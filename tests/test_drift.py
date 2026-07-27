@@ -82,9 +82,12 @@ class TestModels:
     def test_drift_record_defaults(self):
         """DriftRecord sets detected_at."""
         record = DriftRecord(
-            agent_name="agent-1", field_name="provider",
-            expected="a", actual="b",
-            severity="high", message="Changed",
+            agent_name="agent-1",
+            field_name="provider",
+            expected="a",
+            actual="b",
+            severity="high",
+            message="Changed",
         )
         assert record.detected_at is not None
         assert record.id is None
@@ -93,9 +96,12 @@ class TestModels:
         """DriftReport tracks drift count and severity."""
         results = [
             DriftCheckResult(
-                agent_name="a", field="f1",
-                expected="x", actual="y",
-                severity="high", message="drift",
+                agent_name="a",
+                field="f1",
+                expected="x",
+                actual="y",
+                severity="high",
+                message="drift",
             ),
         ]
         report = DriftReport(
@@ -119,6 +125,7 @@ class TestModels:
 def conn(tmp_path: Path) -> sqlite3.Connection:
     """Create a temporary SQLite database with tables for testing."""
     from agent_control_plane.inventory import _ensure_tables
+
     db_path = tmp_path / "test.db"
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
@@ -164,13 +171,18 @@ class TestBaselineCRUD:
 
         now = datetime.now(UTC)
         baseline1 = ConfigBaseline(
-            agent_name="agent-x", provider="openai", captured_at=now,
+            agent_name="agent-x",
+            provider="openai",
+            captured_at=now,
         )
         upsert_config_baseline(conn, baseline1)
 
         baseline2 = ConfigBaseline(
-            agent_name="agent-x", provider="anthropic",
-            expected_version="claude-4", captured_at=now, captured_by="auto",
+            agent_name="agent-x",
+            provider="anthropic",
+            expected_version="claude-4",
+            captured_at=now,
+            captured_by="auto",
         )
         upsert_config_baseline(conn, baseline2)
 
@@ -183,6 +195,7 @@ class TestBaselineCRUD:
     def test_get_baseline_nonexistent(self, conn):
         """Getting baseline for nonexistent agent returns None."""
         from agent_control_plane.inventory import get_config_baseline
+
         result = get_config_baseline(conn, "no-such-agent")
         assert result is None
 
@@ -194,12 +207,22 @@ class TestBaselineCRUD:
         )
 
         now = datetime.now(UTC)
-        upsert_config_baseline(conn, ConfigBaseline(
-            agent_name="agent-a", provider="openai", captured_at=now,
-        ))
-        upsert_config_baseline(conn, ConfigBaseline(
-            agent_name="agent-b", provider="anthropic", captured_at=now,
-        ))
+        upsert_config_baseline(
+            conn,
+            ConfigBaseline(
+                agent_name="agent-a",
+                provider="openai",
+                captured_at=now,
+            ),
+        )
+        upsert_config_baseline(
+            conn,
+            ConfigBaseline(
+                agent_name="agent-b",
+                provider="anthropic",
+                captured_at=now,
+            ),
+        )
 
         baselines = list_config_baselines(conn)
         assert len(baselines) == 2
@@ -216,9 +239,14 @@ class TestBaselineCRUD:
         )
 
         now = datetime.now(UTC)
-        upsert_config_baseline(conn, ConfigBaseline(
-            agent_name="to-delete", provider="openai", captured_at=now,
-        ))
+        upsert_config_baseline(
+            conn,
+            ConfigBaseline(
+                agent_name="to-delete",
+                provider="openai",
+                captured_at=now,
+            ),
+        )
         delete_config_baseline(conn, "to-delete")
 
         result = get_config_baseline(conn, "to-delete")
@@ -231,18 +259,30 @@ class TestDriftLogCRUD:
         from agent_control_plane.inventory import get_drift_history, log_drift
 
         now = datetime.now(UTC)
-        log_drift(conn, DriftRecord(
-            agent_name="agent-1", field_name="provider",
-            expected="openai", actual="anthropic",
-            severity="high", message="Provider changed",
-            detected_at=now,
-        ))
-        log_drift(conn, DriftRecord(
-            agent_name="agent-1", field_name="version",
-            expected="1.0", actual="1.1",
-            severity="low", message="Version changed",
-            detected_at=now,
-        ))
+        log_drift(
+            conn,
+            DriftRecord(
+                agent_name="agent-1",
+                field_name="provider",
+                expected="openai",
+                actual="anthropic",
+                severity="high",
+                message="Provider changed",
+                detected_at=now,
+            ),
+        )
+        log_drift(
+            conn,
+            DriftRecord(
+                agent_name="agent-1",
+                field_name="version",
+                expected="1.0",
+                actual="1.1",
+                severity="low",
+                message="Version changed",
+                detected_at=now,
+            ),
+        )
 
         records = get_drift_history(conn, agent_name="agent-1")
         assert len(records) == 2
@@ -253,16 +293,28 @@ class TestDriftLogCRUD:
         from agent_control_plane.inventory import get_drift_history, log_drift
 
         now = datetime.now(UTC)
-        log_drift(conn, DriftRecord(
-            agent_name="a", field_name="p",
-            expected="x", actual="y",
-            severity="high", detected_at=now,
-        ))
-        log_drift(conn, DriftRecord(
-            agent_name="a", field_name="v",
-            expected="1", actual="2",
-            severity="low", detected_at=now,
-        ))
+        log_drift(
+            conn,
+            DriftRecord(
+                agent_name="a",
+                field_name="p",
+                expected="x",
+                actual="y",
+                severity="high",
+                detected_at=now,
+            ),
+        )
+        log_drift(
+            conn,
+            DriftRecord(
+                agent_name="a",
+                field_name="v",
+                expected="1",
+                actual="2",
+                severity="low",
+                detected_at=now,
+            ),
+        )
 
         high_records = get_drift_history(conn, severity="high")
         assert len(high_records) == 1
@@ -273,21 +325,39 @@ class TestDriftLogCRUD:
         from agent_control_plane.inventory import get_drift_summary, log_drift
 
         now = datetime.now(UTC)
-        log_drift(conn, DriftRecord(
-            agent_name="a", field_name="p",
-            expected="x", actual="y",
-            severity="high", detected_at=now,
-        ))
-        log_drift(conn, DriftRecord(
-            agent_name="b", field_name="p",
-            expected="x", actual="y",
-            severity="high", detected_at=now,
-        ))
-        log_drift(conn, DriftRecord(
-            agent_name="a", field_name="v",
-            expected="1", actual="2",
-            severity="low", detected_at=now,
-        ))
+        log_drift(
+            conn,
+            DriftRecord(
+                agent_name="a",
+                field_name="p",
+                expected="x",
+                actual="y",
+                severity="high",
+                detected_at=now,
+            ),
+        )
+        log_drift(
+            conn,
+            DriftRecord(
+                agent_name="b",
+                field_name="p",
+                expected="x",
+                actual="y",
+                severity="high",
+                detected_at=now,
+            ),
+        )
+        log_drift(
+            conn,
+            DriftRecord(
+                agent_name="a",
+                field_name="v",
+                expected="1",
+                actual="2",
+                severity="low",
+                detected_at=now,
+            ),
+        )
 
         summary = get_drift_summary(conn)
         assert summary.get("high") == 2
@@ -296,6 +366,7 @@ class TestDriftLogCRUD:
     def test_drift_history_empty(self, conn):
         """Empty drift log returns empty list."""
         from agent_control_plane.inventory import get_drift_history
+
         records = get_drift_history(conn)
         assert records == []
 
@@ -305,11 +376,17 @@ class TestDriftLogCRUD:
 
         now = datetime.now(UTC)
         for i in range(5):
-            log_drift(conn, DriftRecord(
-                agent_name="a", field_name=f"f{i}",
-                expected="x", actual="y",
-                severity="low", detected_at=now,
-            ))
+            log_drift(
+                conn,
+                DriftRecord(
+                    agent_name="a",
+                    field_name=f"f{i}",
+                    expected="x",
+                    actual="y",
+                    severity="low",
+                    detected_at=now,
+                ),
+            )
 
         limited = get_drift_history(conn, limit=2)
         assert len(limited) == 2
@@ -407,12 +484,13 @@ class TestDriftEngine:
         conn.execute(
             "INSERT INTO agents (name, url, provider, status, tags, first_seen, last_seen) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            ("test-agent-1", "http://localhost:2", "openai", "unknown",
-             '["prod"]', now, now),
+            ("test-agent-1", "http://localhost:2", "openai", "unknown", '["prod"]', now, now),
         )
         conn.commit()
 
-        baseline = set_baseline("test-agent-1", provider="anthropic", expected_version="claude-4", conn=conn)
+        baseline = set_baseline(
+            "test-agent-1", provider="anthropic", expected_version="claude-4", conn=conn
+        )
         assert baseline is not None
         assert baseline.provider == "anthropic"
 
@@ -427,16 +505,20 @@ class TestDriftEngine:
         conn.execute(
             "INSERT INTO agents (name, url, provider, status, tags, first_seen, last_seen) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            ("test-agent-2", "http://localhost:3", "openai", "unknown",
-             "[]", now, now),
+            ("test-agent-2", "http://localhost:3", "openai", "unknown", "[]", now, now),
         )
         conn.commit()
 
         # Create initial baseline
         bl_now = datetime.now(UTC)
-        upsert_config_baseline(conn, ConfigBaseline(
-            agent_name="test-agent-2", provider="openai", captured_at=bl_now,
-        ))
+        upsert_config_baseline(
+            conn,
+            ConfigBaseline(
+                agent_name="test-agent-2",
+                provider="openai",
+                captured_at=bl_now,
+            ),
+        )
 
         # Update via set_baseline
         result = set_baseline("test-agent-2", provider="anthropic", conn=conn)
@@ -463,15 +545,25 @@ class TestCheckDriftWithMock:
 
         conn = get_connection()
         now = datetime.now(UTC)
-        upsert_agent(conn, AgentRecord(
-            name="drift-test-agent", url="http://localhost:9999",
-            provider="anthropic", status=AgentStatus.ONLINE,
-            tags=["prod"],
-        ))
-        upsert_config_baseline(conn, ConfigBaseline(
-            agent_name="drift-test-agent", provider="openai",
-            expected_version="gpt-4", captured_at=now,
-        ))
+        upsert_agent(
+            conn,
+            AgentRecord(
+                name="drift-test-agent",
+                url="http://localhost:9999",
+                provider="anthropic",
+                status=AgentStatus.ONLINE,
+                tags=["prod"],
+            ),
+        )
+        upsert_config_baseline(
+            conn,
+            ConfigBaseline(
+                agent_name="drift-test-agent",
+                provider="openai",
+                expected_version="gpt-4",
+                captured_at=now,
+            ),
+        )
         conn.close()
 
         from agent_control_plane.drift import check_drift
@@ -486,6 +578,7 @@ class TestCheckDriftWithMock:
     def test_check_drift_no_drift(self, monkeypatch, tmp_path):
         """Check drift passes when config matches."""
         import os
+
         os.environ["ACP_HOME"] = str(tmp_path)
 
         from agent_control_plane.inventory import (
@@ -497,15 +590,25 @@ class TestCheckDriftWithMock:
 
         conn = get_connection()
         now = datetime.now(UTC)
-        upsert_agent(conn, AgentRecord(
-            name="drift-match-agent", url="http://localhost:9998",
-            provider="openai", status=AgentStatus.ONLINE,
-            tags=["prod"],
-        ))
-        upsert_config_baseline(conn, ConfigBaseline(
-            agent_name="drift-match-agent", provider="openai",
-            expected_tags=["prod"], captured_at=now,
-        ))
+        upsert_agent(
+            conn,
+            AgentRecord(
+                name="drift-match-agent",
+                url="http://localhost:9998",
+                provider="openai",
+                status=AgentStatus.ONLINE,
+                tags=["prod"],
+            ),
+        )
+        upsert_config_baseline(
+            conn,
+            ConfigBaseline(
+                agent_name="drift-match-agent",
+                provider="openai",
+                expected_tags=["prod"],
+                captured_at=now,
+            ),
+        )
         conn.close()
 
         from agent_control_plane.drift import check_drift
@@ -548,19 +651,27 @@ def health_server():
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(json.dumps({
-                    "status": "ok",
-                    "version": "gpt-4",
-                    "service": "test-agent",
-                    "environment": "test",
-                }).encode())
+                self.wfile.write(
+                    json.dumps(
+                        {
+                            "status": "ok",
+                            "version": "gpt-4",
+                            "service": "test-agent",
+                            "environment": "test",
+                        }
+                    ).encode()
+                )
             elif self.path == "/v1/models":
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(json.dumps({
-                    "data": [{"id": "gpt-4", "object": "model"}],
-                }).encode())
+                self.wfile.write(
+                    json.dumps(
+                        {
+                            "data": [{"id": "gpt-4", "object": "model"}],
+                        }
+                    ).encode()
+                )
             else:
                 self.send_response(404)
                 self.end_headers()
@@ -607,6 +718,7 @@ class TestDriftE2E:
     def test_capture_baseline_e2e(self, health_server, tmp_path):
         """Capture baseline from a real agent endpoint."""
         import os
+
         os.environ["ACP_HOME"] = str(tmp_path)
 
         from agent_control_plane.inventory import get_connection, upsert_agent
@@ -614,13 +726,16 @@ class TestDriftE2E:
 
         conn = get_connection()
         datetime.now(UTC)
-        upsert_agent(conn, AgentRecord(
-            name="e2e-agent",
-            url=f"http://127.0.0.1:{health_server}",
-            provider="openai",
-            status=AgentStatus.ONLINE,
-            tags=["e2e"],
-        ))
+        upsert_agent(
+            conn,
+            AgentRecord(
+                name="e2e-agent",
+                url=f"http://127.0.0.1:{health_server}",
+                provider="openai",
+                status=AgentStatus.ONLINE,
+                tags=["e2e"],
+            ),
+        )
         conn.close()
 
         from agent_control_plane.drift import capture_baseline
@@ -635,6 +750,7 @@ class TestDriftE2E:
     def test_check_drift_e2e_matching(self, health_server, tmp_path):
         """Full drift check against a matching agent."""
         import os
+
         os.environ["ACP_HOME"] = str(tmp_path)
 
         from agent_control_plane.inventory import (
@@ -646,21 +762,27 @@ class TestDriftE2E:
 
         conn = get_connection()
         now = datetime.now(UTC)
-        upsert_agent(conn, AgentRecord(
-            name="e2e-match",
-            url=f"http://127.0.0.1:{health_server}",
-            provider="openai",
-            status=AgentStatus.ONLINE,
-            tags=["e2e"],
-        ))
-        upsert_config_baseline(conn, ConfigBaseline(
-            agent_name="e2e-match",
-            provider="openai",
-            expected_version="gpt-4",
-            expected_tags=["e2e"],
-            additional_fields={"environment": "test"},
-            captured_at=now,
-        ))
+        upsert_agent(
+            conn,
+            AgentRecord(
+                name="e2e-match",
+                url=f"http://127.0.0.1:{health_server}",
+                provider="openai",
+                status=AgentStatus.ONLINE,
+                tags=["e2e"],
+            ),
+        )
+        upsert_config_baseline(
+            conn,
+            ConfigBaseline(
+                agent_name="e2e-match",
+                provider="openai",
+                expected_version="gpt-4",
+                expected_tags=["e2e"],
+                additional_fields={"environment": "test"},
+                captured_at=now,
+            ),
+        )
         conn.close()
 
         from agent_control_plane.drift import check_drift
@@ -673,6 +795,7 @@ class TestDriftE2E:
     def test_check_drift_e2e_mismatch(self, health_server, tmp_path):
         """Full drift check detects mismatched config."""
         import os
+
         os.environ["ACP_HOME"] = str(tmp_path)
 
         from agent_control_plane.inventory import (
@@ -684,20 +807,26 @@ class TestDriftE2E:
 
         conn = get_connection()
         now = datetime.now(UTC)
-        upsert_agent(conn, AgentRecord(
-            name="e2e-mismatch",
-            url=f"http://127.0.0.1:{health_server}",
-            provider="anthropic",  # Different from baseline!
-            status=AgentStatus.ONLINE,
-            tags=["prod"],
-        ))
-        upsert_config_baseline(conn, ConfigBaseline(
-            agent_name="e2e-mismatch",
-            provider="openai",  # Baseline says openai
-            expected_version="claude-4",  # But version says gpt-4
-            additional_fields={"environment": "production"},  # Server says "test"
-            captured_at=now,
-        ))
+        upsert_agent(
+            conn,
+            AgentRecord(
+                name="e2e-mismatch",
+                url=f"http://127.0.0.1:{health_server}",
+                provider="anthropic",  # Different from baseline!
+                status=AgentStatus.ONLINE,
+                tags=["prod"],
+            ),
+        )
+        upsert_config_baseline(
+            conn,
+            ConfigBaseline(
+                agent_name="e2e-mismatch",
+                provider="openai",  # Baseline says openai
+                expected_version="claude-4",  # But version says gpt-4
+                additional_fields={"environment": "production"},  # Server says "test"
+                captured_at=now,
+            ),
+        )
         conn.close()
 
         from agent_control_plane.drift import check_drift
@@ -712,6 +841,7 @@ class TestDriftE2E:
     def test_check_all_drift_e2e(self, health_server, tmp_path):
         """check_all_drift returns reports for agents with baselines."""
         import os
+
         os.environ["ACP_HOME"] = str(tmp_path)
 
         from agent_control_plane.inventory import (
@@ -723,22 +853,44 @@ class TestDriftE2E:
 
         conn = get_connection()
         now = datetime.now(UTC)
-        upsert_agent(conn, AgentRecord(
-            name="all-drift-1", url=f"http://127.0.0.1:{health_server}",
-            provider="openai", status=AgentStatus.ONLINE, tags=[],
-        ))
-        upsert_agent(conn, AgentRecord(
-            name="all-drift-2", url=f"http://127.0.0.1:{health_server}",
-            provider="openai", status=AgentStatus.ONLINE, tags=[],
-        ))
-        upsert_config_baseline(conn, ConfigBaseline(
-            agent_name="all-drift-1", provider="openai",
-            expected_version="gpt-4", captured_at=now,
-        ))
-        upsert_config_baseline(conn, ConfigBaseline(
-            agent_name="all-drift-2", provider="openai",
-            expected_version="gpt-4", captured_at=now,
-        ))
+        upsert_agent(
+            conn,
+            AgentRecord(
+                name="all-drift-1",
+                url=f"http://127.0.0.1:{health_server}",
+                provider="openai",
+                status=AgentStatus.ONLINE,
+                tags=[],
+            ),
+        )
+        upsert_agent(
+            conn,
+            AgentRecord(
+                name="all-drift-2",
+                url=f"http://127.0.0.1:{health_server}",
+                provider="openai",
+                status=AgentStatus.ONLINE,
+                tags=[],
+            ),
+        )
+        upsert_config_baseline(
+            conn,
+            ConfigBaseline(
+                agent_name="all-drift-1",
+                provider="openai",
+                expected_version="gpt-4",
+                captured_at=now,
+            ),
+        )
+        upsert_config_baseline(
+            conn,
+            ConfigBaseline(
+                agent_name="all-drift-2",
+                provider="openai",
+                expected_version="gpt-4",
+                captured_at=now,
+            ),
+        )
         conn.close()
 
         from agent_control_plane.drift import check_all_drift
@@ -750,6 +902,7 @@ class TestDriftE2E:
     def test_capture_baseline_already_exists(self, health_server, tmp_path):
         """capture_baseline updates existing baseline on re-capture."""
         import os
+
         os.environ["ACP_HOME"] = str(tmp_path)
 
         from agent_control_plane.inventory import get_connection, upsert_agent
@@ -757,10 +910,16 @@ class TestDriftE2E:
 
         conn = get_connection()
         datetime.now(UTC)
-        upsert_agent(conn, AgentRecord(
-            name="e2e-recapture", url=f"http://127.0.0.1:{health_server}",
-            provider="openai", status=AgentStatus.ONLINE, tags=[],
-        ))
+        upsert_agent(
+            conn,
+            AgentRecord(
+                name="e2e-recapture",
+                url=f"http://127.0.0.1:{health_server}",
+                provider="openai",
+                status=AgentStatus.ONLINE,
+                tags=[],
+            ),
+        )
         conn.close()
 
         from agent_control_plane.drift import capture_baseline
@@ -782,6 +941,7 @@ class TestDriftAlertIntegration:
     def test_dispatch_drift_alert_with_config(self, tmp_path):
         """dispatch_drift_alert works when alerts are configured."""
         import os
+
         os.environ["ACP_HOME"] = str(tmp_path)
 
         from agent_control_plane.alerts.engine import dispatch_drift_alert
@@ -795,19 +955,32 @@ class TestDriftAlertIntegration:
 
         # Create a config file that enables alerts
         import yaml
-        config = {"agents": [], "alerts": {"enabled": True, "global": {"consecutive_failures": 3, "rate_limit_seconds": 0}}}
+
+        config = {
+            "agents": [],
+            "alerts": {
+                "enabled": True,
+                "global": {"consecutive_failures": 3, "rate_limit_seconds": 0},
+            },
+        }
         config_path = tmp_path / "config.yaml"
         with open(config_path, "w") as f:
             yaml.dump(config, f)
         os.environ["ACP_CONFIG"] = str(config_path)
 
-        dispatch_drift_alert("integration-agent", drift_count=3, max_severity="critical",
-                             details="Provider changed; Version changed")
+        dispatch_drift_alert(
+            "integration-agent",
+            drift_count=3,
+            max_severity="critical",
+            details="Provider changed; Version changed",
+        )
 
         conn = get_connection()
         summary = get_drift_summary(conn)
         conn.close()
-        assert "critical" not in summary  # No alert type "critical" in drift_log - DRIFT alerts go to alert_history table
+        assert (
+            "critical" not in summary
+        )  # No alert type "critical" in drift_log - DRIFT alerts go to alert_history table
 
 
 # ---------------------------------------------------------------------------
@@ -825,6 +998,7 @@ def test_app(tmp_path: Path):
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     from agent_control_plane.inventory import _ensure_tables
+
     _ensure_tables(conn)
 
     # Insert test agent
@@ -857,6 +1031,7 @@ def test_app(tmp_path: Path):
     from fastapi.testclient import TestClient
 
     from agent_control_plane.dashboard import create_app
+
     app = create_app()
     return TestClient(app)
 
@@ -922,6 +1097,7 @@ class TestCLIDriftCommands:
     def test_cli_has_drift_commands(self):
         """CLI parser recognizes drift commands."""
         from agent_control_plane.cli import _build_parser
+
         parser = _build_parser()
 
         # config-baseline
@@ -944,7 +1120,9 @@ class TestCLIDriftCommands:
         assert args.name == "test-agent"
 
         # config-baseline set
-        args = parser.parse_args(["config-baseline", "set", "test-agent", "--provider", "openai", "--version", "1.0"])
+        args = parser.parse_args(
+            ["config-baseline", "set", "test-agent", "--provider", "openai", "--version", "1.0"]
+        )
         assert args.config_baseline_command == "set"
         assert args.provider == "openai"
         assert args.version == "1.0"
@@ -952,6 +1130,7 @@ class TestCLIDriftCommands:
     def test_cmd_drift_report_with_data(self, tmp_path):
         """CLI drift-report runs without error when data exists."""
         import os
+
         os.environ["ACP_HOME"] = str(tmp_path)
 
         from agent_control_plane.inventory import get_connection, log_drift
@@ -959,32 +1138,43 @@ class TestCLIDriftCommands:
 
         conn = get_connection()
         now = datetime.now(UTC)
-        log_drift(conn, DriftRecord(
-            agent_name="cli-test-agent", field_name="provider",
-            expected="openai", actual="anthropic",
-            severity="high", message="Provider changed",
-            detected_at=now,
-        ))
+        log_drift(
+            conn,
+            DriftRecord(
+                agent_name="cli-test-agent",
+                field_name="provider",
+                expected="openai",
+                actual="anthropic",
+                severity="high",
+                message="Provider changed",
+                detected_at=now,
+            ),
+        )
         conn.close()
 
         from agent_control_plane.cli import cmd_drift_report
+
         cmd_drift_report()  # Should not raise
 
     def test_cmd_drift_report_empty(self, tmp_path):
         """CLI drift-report handles empty data gracefully."""
         import os
+
         os.environ["ACP_HOME"] = str(tmp_path)
 
         from agent_control_plane.cli import cmd_drift_report
+
         cmd_drift_report()  # Should not raise
 
     def test_cmd_config_baseline_list_empty(self, tmp_path):
         """CLI config-baseline list handles empty state."""
         import os
         from argparse import Namespace
+
         os.environ["ACP_HOME"] = str(tmp_path)
 
         from agent_control_plane.cli import cmd_config_baseline
+
         args = Namespace(config_baseline_command="list")
         cmd_config_baseline(args)  # Should not raise
 
@@ -992,9 +1182,11 @@ class TestCLIDriftCommands:
         """CLI config-baseline show handles missing baseline."""
         import os
         from argparse import Namespace
+
         os.environ["ACP_HOME"] = str(tmp_path)
 
         from agent_control_plane.cli import cmd_config_baseline
+
         args = Namespace(config_baseline_command="show", name="no-such-agent")
         cmd_config_baseline(args)  # Should not raise
 
@@ -1002,9 +1194,11 @@ class TestCLIDriftCommands:
         """CLI config-baseline delete handles missing baseline."""
         import os
         from argparse import Namespace
+
         os.environ["ACP_HOME"] = str(tmp_path)
 
         from agent_control_plane.cli import cmd_config_baseline
+
         args = Namespace(config_baseline_command="delete", name="no-such-agent")
         cmd_config_baseline(args)  # Should not raise
 
@@ -1012,6 +1206,7 @@ class TestCLIDriftCommands:
         """CLI config-baseline set works with a real agent."""
         import os
         from argparse import Namespace
+
         os.environ["ACP_HOME"] = str(tmp_path)
 
         from agent_control_plane.inventory import get_connection, upsert_agent
@@ -1019,16 +1214,27 @@ class TestCLIDriftCommands:
 
         conn = get_connection()
         datetime.now(UTC)
-        upsert_agent(conn, AgentRecord(
-            name="cli-baseline-agent", url="http://localhost:1",
-            provider="openai", status=AgentStatus.ONLINE, tags=["test"],
-        ))
+        upsert_agent(
+            conn,
+            AgentRecord(
+                name="cli-baseline-agent",
+                url="http://localhost:1",
+                provider="openai",
+                status=AgentStatus.ONLINE,
+                tags=["test"],
+            ),
+        )
         conn.close()
 
         from agent_control_plane.cli import cmd_config_baseline
+
         args = Namespace(
-            config_baseline_command="set", name="cli-baseline-agent",
-            provider="anthropic", health_path=None, version=None, tags=None,
+            config_baseline_command="set",
+            name="cli-baseline-agent",
+            provider="anthropic",
+            health_path=None,
+            version=None,
+            tags=None,
         )
         cmd_config_baseline(args)  # Should not raise
 
@@ -1036,6 +1242,7 @@ class TestCLIDriftCommands:
         """CLI config-baseline show displays existing baseline."""
         import os
         from argparse import Namespace
+
         os.environ["ACP_HOME"] = str(tmp_path)
 
         from agent_control_plane.inventory import (
@@ -1047,17 +1254,30 @@ class TestCLIDriftCommands:
 
         conn = get_connection()
         now = datetime.now(UTC)
-        upsert_agent(conn, AgentRecord(
-            name="show-me", url="http://localhost:1",
-            provider="openai", status=AgentStatus.ONLINE, tags=["test"],
-        ))
-        upsert_config_baseline(conn, ConfigBaseline(
-            agent_name="show-me", provider="openai",
-            expected_version="gpt-4", expected_tags=["test"], captured_at=now,
-        ))
+        upsert_agent(
+            conn,
+            AgentRecord(
+                name="show-me",
+                url="http://localhost:1",
+                provider="openai",
+                status=AgentStatus.ONLINE,
+                tags=["test"],
+            ),
+        )
+        upsert_config_baseline(
+            conn,
+            ConfigBaseline(
+                agent_name="show-me",
+                provider="openai",
+                expected_version="gpt-4",
+                expected_tags=["test"],
+                captured_at=now,
+            ),
+        )
         conn.close()
 
         from agent_control_plane.cli import cmd_config_baseline
+
         args = Namespace(config_baseline_command="show", name="show-me")
         cmd_config_baseline(args)  # Should not raise
 
@@ -1065,6 +1285,7 @@ class TestCLIDriftCommands:
         """CLI config-baseline list displays baselines."""
         import os
         from argparse import Namespace
+
         os.environ["ACP_HOME"] = str(tmp_path)
 
         from agent_control_plane.inventory import (
@@ -1076,15 +1297,27 @@ class TestCLIDriftCommands:
 
         conn = get_connection()
         now = datetime.now(UTC)
-        upsert_agent(conn, AgentRecord(
-            name="list-test", url="http://localhost:1",
-            provider="openai", status=AgentStatus.ONLINE, tags=[],
-        ))
-        upsert_config_baseline(conn, ConfigBaseline(
-            agent_name="list-test", provider="openai", captured_at=now,
-        ))
+        upsert_agent(
+            conn,
+            AgentRecord(
+                name="list-test",
+                url="http://localhost:1",
+                provider="openai",
+                status=AgentStatus.ONLINE,
+                tags=[],
+            ),
+        )
+        upsert_config_baseline(
+            conn,
+            ConfigBaseline(
+                agent_name="list-test",
+                provider="openai",
+                captured_at=now,
+            ),
+        )
         conn.close()
 
         from agent_control_plane.cli import cmd_config_baseline
+
         args = Namespace(config_baseline_command="list")
         cmd_config_baseline(args)  # Should not raise

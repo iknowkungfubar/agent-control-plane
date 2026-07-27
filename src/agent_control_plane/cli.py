@@ -29,7 +29,9 @@ def _build_parser() -> argparse.ArgumentParser:
         description="AI Agent Operations Platform — discover, inventory, monitor, and track costs for AI agents.",
     )
     parser.add_argument(
-        "--version", action="version", version=f"%(prog)s {__version__}",
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
 
     sub = parser.add_subparsers(dest="command", help="Command to execute")
@@ -43,7 +45,9 @@ def _build_parser() -> argparse.ArgumentParser:
     # health
     health_p = sub.add_parser("health", help="Run health checks against all agents")
     health_p.add_argument(
-        "--timeout", type=float, default=5.0,
+        "--timeout",
+        type=float,
+        default=5.0,
         help="HTTP timeout per check in seconds (default: 5.0)",
     )
 
@@ -53,11 +57,16 @@ def _build_parser() -> argparse.ArgumentParser:
     # export
     export_p = sub.add_parser("export", help="Export inventory to file")
     export_p.add_argument(
-        "--format", choices=["json", "csv"], default="json",
+        "--format",
+        choices=["json", "csv"],
+        default="json",
         help="Export format (default: json)",
     )
     export_p.add_argument(
-        "--output", "-o", type=str, default=None,
+        "--output",
+        "-o",
+        type=str,
+        default=None,
         help="Output file path (default: auto-named in ACP_HOME)",
     )
 
@@ -67,19 +76,26 @@ def _build_parser() -> argparse.ArgumentParser:
     # discover
     discover_p = sub.add_parser("discover", help="Auto-discover AI agents on a host")
     discover_p.add_argument(
-        "--host", type=str, default="127.0.0.1",
+        "--host",
+        type=str,
+        default="127.0.0.1",
         help="Host to scan (default: 127.0.0.1)",
     )
     discover_p.add_argument(
-        "--ports", type=str, default=None,
+        "--ports",
+        type=str,
+        default=None,
         help="Port(s) to scan, comma-separated or range (default: 11434,8080,8000,5000,3000)",
     )
     discover_p.add_argument(
-        "--register", action="store_true",
+        "--register",
+        action="store_true",
         help="Register discovered agents into inventory",
     )
     discover_p.add_argument(
-        "--timeout", type=float, default=2.0,
+        "--timeout",
+        type=float,
+        default=2.0,
         help="HTTP probe timeout per port (default: 2.0s)",
     )
 
@@ -90,11 +106,16 @@ def _build_parser() -> argparse.ArgumentParser:
     # dashboard
     dash_p = sub.add_parser("dashboard", help="Start the web UI dashboard")
     dash_p.add_argument(
-        "--host", type=str, default="127.0.0.1",
+        "--host",
+        type=str,
+        default="127.0.0.1",
         help="Host to bind to (default: 127.0.0.1)",
     )
     dash_p.add_argument(
-        "--port", "-p", type=int, default=8337,
+        "--port",
+        "-p",
+        type=int,
+        default=8337,
         help="Port to bind to (default: 8337)",
     )
 
@@ -104,7 +125,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
     cb_capture = cb_sub.add_parser("capture", help="Capture baseline from live agent")
     cb_capture.add_argument("name", type=str, help="Agent name")
-    cb_capture.add_argument("--timeout", type=float, default=5.0, help="HTTP timeout (default: 5.0s)")
+    cb_capture.add_argument(
+        "--timeout",
+        type=float,
+        default=5.0,
+        help="HTTP timeout (default: 5.0s)",
+    )
 
     cb_set = cb_sub.add_parser("set", help="Manually set baseline values")
     cb_set.add_argument("name", type=str, help="Agent name")
@@ -136,8 +162,13 @@ def _build_parser() -> argparse.ArgumentParser:
     user_create = user_sub.add_parser("create", help="Create a new user")
     user_create.add_argument("name", type=str, help="User name")
     user_create.add_argument("--email", type=str, required=True, help="Email address")
-    user_create.add_argument("--role", type=str, default="viewer",
-                             choices=["admin", "operator", "viewer"], help="User role")
+    user_create.add_argument(
+        "--role",
+        type=str,
+        default="viewer",
+        choices=["admin", "operator", "viewer"],
+        help="User role",
+    )
 
     user_sub.add_parser("list", help="List all users")
 
@@ -161,8 +192,13 @@ def _build_parser() -> argparse.ArgumentParser:
     team_add_member = team_sub.add_parser("add-member", help="Add a user to a team")
     team_add_member.add_argument("team", type=str, help="Team ID")
     team_add_member.add_argument("--user", type=str, required=True, help="User name")
-    team_add_member.add_argument("--role", type=str, default="viewer",
-                                 choices=["admin", "operator", "viewer"], help="Role in team")
+    team_add_member.add_argument(
+        "--role",
+        type=str,
+        default="viewer",
+        choices=["admin", "operator", "viewer"],
+        help="Role in team",
+    )
 
     team_rm_member = team_sub.add_parser("remove-member", help="Remove a user from a team")
     team_rm_member.add_argument("team", type=str, help="Team ID")
@@ -177,7 +213,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # shadow commands
     shadow_p = sub.add_parser("shadow-scan", help="Scan for shadow AI/SaaS services")
-    shadow_p.add_argument("--cidr", type=str, default=None, help="CIDR range to scan (e.g. 10.0.0.0/24)")
+    shadow_p.add_argument(
+        "--cidr",
+        type=str,
+        default=None,
+        help="CIDR range to scan (e.g. 10.0.0.0/24)",
+    )
     shadow_p.add_argument("--host", type=str, default=None, help="Single host to scan")
     shadow_p.add_argument("--ports", type=str, default=None, help="Ports to scan (comma-separated)")
 
@@ -190,16 +231,41 @@ def _build_parser() -> argparse.ArgumentParser:
     notify_sub = notify_p.add_subparsers(dest="notify_command", help="Notify sub-command")
 
     notify_list = notify_sub.add_parser("list", help="List notification delivery history")
-    notify_list.add_argument("--channel", type=str, default=None, help="Filter by channel (webhook, slack, discord)")
+    notify_list.add_argument(
+        "--channel",
+        type=str,
+        default=None,
+        help="Filter by channel (webhook, slack, discord)",
+    )
     notify_list.add_argument("--agent", type=str, default=None, help="Filter by agent name")
-    notify_list.add_argument("--type", type=str, default=None, help="Filter by alert type (DOWN, RECOVERY, etc.)")
+    notify_list.add_argument(
+        "--type",
+        type=str,
+        default=None,
+        help="Filter by alert type (DOWN, RECOVERY, etc.)",
+    )
     notify_list.add_argument("--limit", type=int, default=20, help="Max results (default: 20)")
 
     notify_test = notify_sub.add_parser("test", help="Send a test notification")
-    notify_test.add_argument("--agent", type=str, default="test-agent", help="Agent name to use in test")
+    notify_test.add_argument(
+        "--agent",
+        type=str,
+        default="test-agent",
+        help="Agent name to use in test",
+    )
     notify_test.add_argument("--webhook-url", type=str, default=None, help="Webhook URL override")
-    notify_test.add_argument("--slack-url", type=str, default=None, help="Slack webhook URL override")
-    notify_test.add_argument("--discord-url", type=str, default=None, help="Discord webhook URL override")
+    notify_test.add_argument(
+        "--slack-url",
+        type=str,
+        default=None,
+        help="Slack webhook URL override",
+    )
+    notify_test.add_argument(
+        "--discord-url",
+        type=str,
+        default=None,
+        help="Discord webhook URL override",
+    )
 
     return parser
 
@@ -213,7 +279,9 @@ def cmd_scan() -> None:
         return
 
     agents = scan_and_report()
-    console.print(f"[green]✓[/green] Scan complete. [bold]{len(agents)}[/bold] agent(s) in inventory.")
+    console.print(
+        f"[green]✓[/green] Scan complete. [bold]{len(agents)}[/bold] agent(s) in inventory.",
+    )
 
 
 def cmd_list() -> None:
@@ -262,7 +330,9 @@ def cmd_health(timeout: float = 5.0) -> None:
         console.print("[yellow]No agents configured. Create a config file first.[/yellow]")
         return
 
-    console.print(f"[bold]Running health checks ({len(agents)} agent(s), timeout={timeout}s)...[/bold]")
+    console.print(
+        f"[bold]Running health checks ({len(agents)} agent(s), timeout={timeout}s)...[/bold]",
+    )
 
     results = run_health_checks(agents, timeout=timeout)
 
@@ -312,7 +382,9 @@ def cmd_cost() -> None:
     total = total_monthly_cost()
 
     if not costs:
-        console.print("[yellow]No cost data available. Record costs with 'acp cost-record' or submit token counts via API.[/yellow]")
+        console.print(
+            "[yellow]No cost data available. Record costs with 'acp cost-record' or submit token counts via API.[/yellow]",
+        )
         return
 
     table = Table(title="Cost Estimates")
@@ -352,7 +424,7 @@ def cmd_export(format: str = "json", output: str | None = None) -> None:
             export_csv(out_path)
 
         console.print(f"[green]✓[/green] Exported to [bold]{out_path}[/bold]")
-    except Exception as e:
+    except (OSError, PermissionError) as e:
         console.print(f"[red]✗ Export failed: {e}[/red]")
         sys.exit(1)
 
@@ -394,12 +466,13 @@ def cmd_dashboard(host: str = "127.0.0.1", port: int = 8337) -> None:
     """Start the web UI dashboard."""
     try:
         from agent_control_plane.dashboard import serve_dashboard
+
         serve_dashboard(host=host, port=port)
     except ImportError as e:
         console.print(f"[red]✗ Dashboard dependencies not installed: {e}[/red]")
         console.print("Run: pip install fastapi uvicorn jinja2")
         sys.exit(1)
-    except Exception as e:
+    except (ModuleNotFoundError, OSError) as e:
         console.print(f"[red]✗ Failed to start dashboard: {e}[/red]")
         sys.exit(1)
 
@@ -433,7 +506,9 @@ def cmd_discover(
             found += 1
             provider_display = result.get("provider", "unknown")
             name = result["name"]
-            console.print(f"  [green]✓[/green] Port {port}: [cyan]{name}[/cyan] ({provider_display})")
+            console.print(
+                f"  [green]✓[/green] Port {port}: [cyan]{name}[/cyan] ({provider_display})",
+            )
             if register:
                 record = register_discovered(result)
                 console.print(f"    Registered as '{record.name}'")
@@ -562,7 +637,9 @@ def cmd_drift_check(name: str | None = None, timeout: float = 5.0) -> None:
     total_drift = 0
     for report in reports:
         if not report.has_baseline:
-            console.print(f"[yellow]No baseline for '{report.agent_name}'[/yellow] - run 'acp config-baseline capture {report.agent_name}'")
+            console.print(
+                f"[yellow]No baseline for '{report.agent_name}'[/yellow] - run 'acp config-baseline capture {report.agent_name}'",
+            )
             continue
 
         if report.drift_count == 0:
@@ -570,9 +647,15 @@ def cmd_drift_check(name: str | None = None, timeout: float = 5.0) -> None:
             continue
 
         total_drift += report.drift_count
-        sev = report.max_severity.value if isinstance(report.max_severity, DriftSeverity) else str(report.max_severity)
+        sev = (
+            report.max_severity.value
+            if isinstance(report.max_severity, DriftSeverity)
+            else str(report.max_severity)
+        )
         color = severity_colors.get(sev, "white")
-        console.print(f"[{color}]⚠[/{color}] [bold]{report.agent_name}[/bold]: {report.drift_count} drift(s), max severity: [{color}]{sev}[/{color}]")
+        console.print(
+            f"[{color}]⚠[/{color}] [bold]{report.agent_name}[/bold]: {report.drift_count} drift(s), max severity: [{color}]{sev}[/{color}]",
+        )
 
         for r in report.results:
             if DriftSeverity(r.severity) == DriftSeverity.NONE:
@@ -656,7 +739,9 @@ def cmd_user(args: argparse.Namespace) -> None:
             email=args.email,
             role=args.role,
         )
-        console.print(f"[green]✓[/green] User [bold]{user.name}[/bold] created ([cyan]{user.role.value}[/cyan])")
+        console.print(
+            f"[green]✓[/green] User [bold]{user.name}[/bold] created ([cyan]{user.role.value}[/cyan])",
+        )
         console.print(f"\n  API Key: [bold yellow]{api_key}[/bold yellow]")
         console.print("  [dim]Save this key — it will not be shown again.[/dim]")
 
@@ -673,8 +758,7 @@ def cmd_user(args: argparse.Namespace) -> None:
         table.add_column("Role")
         table.add_column("Created")
         for u in users:
-            table.add_row(u.name, u.email, u.role.value,
-                          u.created_at.strftime("%Y-%m-%d"))
+            table.add_row(u.name, u.email, u.role.value, u.created_at.strftime("%Y-%m-%d"))
         console.print(table)
 
     elif args.user_command == "delete":
@@ -750,19 +834,25 @@ def cmd_team(args: argparse.Namespace) -> None:
         conn = get_connection()
         add_team_member(conn, member)
         conn.close()
-        console.print(f"[green]✓[/green] User [bold]{args.user}[/bold] added to team [bold]{args.team}[/bold] as {args.role}")
+        console.print(
+            f"[green]✓[/green] User [bold]{args.user}[/bold] added to team [bold]{args.team}[/bold] as {args.role}",
+        )
 
     elif args.team_command == "remove-member":
         conn = get_connection()
         remove_team_member(conn, args.user, args.team)
         conn.close()
-        console.print(f"[green]✓[/green] User [bold]{args.user}[/bold] removed from team [bold]{args.team}[/bold]")
+        console.print(
+            f"[green]✓[/green] User [bold]{args.user}[/bold] removed from team [bold]{args.team}[/bold]",
+        )
 
     elif args.team_command == "add-agent":
         conn = get_connection()
         assign_agent_to_team(conn, args.agent, args.team)
         conn.close()
-        console.print(f"[green]✓[/green] Agent [bold]{args.agent}[/bold] assigned to team [bold]{args.team}[/bold]")
+        console.print(
+            f"[green]✓[/green] Agent [bold]{args.agent}[/bold] assigned to team [bold]{args.team}[/bold]",
+        )
 
     elif args.team_command == "remove-agent":
         conn = get_connection()
@@ -938,7 +1028,12 @@ def cmd_shadow_report() -> None:
             console.print(f"  [red]⚠[/red] {s.name} ({s.host}:{s.port}) — {s.service_type}")
 
 
-def cmd_notify_list(limit: int = 20, channel: str | None = None, agent_name: str | None = None, alert_type: str | None = None) -> None:
+def cmd_notify_list(
+    limit: int = 20,
+    channel: str | None = None,
+    agent_name: str | None = None,
+    alert_type: str | None = None,
+) -> None:
     """Show notification delivery history."""
     from agent_control_plane.notifications.service import get_notification_history
 
@@ -1036,8 +1131,10 @@ def main(argv: list[str] | None = None) -> int:
             cmd_dashboard(host=args.host, port=args.port)
         elif args.command == "discover":
             cmd_discover(
-                host=args.host, ports=args.ports,
-                register=args.register, timeout=args.timeout,
+                host=args.host,
+                ports=args.ports,
+                register=args.register,
+                timeout=args.timeout,
             )
         elif args.command == "config-baseline":
             cmd_config_baseline(args)
@@ -1077,7 +1174,7 @@ def main(argv: list[str] | None = None) -> int:
     except FileNotFoundError as e:
         console.print(f"[red]✗ {e}[/red]")
         return 1
-    except Exception as e:
+    except (ValueError, OSError, RuntimeError) as e:
         console.print(f"[red]✗ Unexpected error: {e}[/red]")
         return 1
 

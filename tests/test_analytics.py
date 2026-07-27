@@ -45,20 +45,48 @@ def db_with_health_data() -> str:
             base = now - timedelta(days=day_offset)
             # Morning check
             log_health_check(
-                conn, "test-agent", AgentStatus.ONLINE, 100.0, 200,
+                conn,
+                "test-agent",
+                AgentStatus.ONLINE,
+                100.0,
+                200,
                 timestamp=base.replace(hour=8, minute=0),
             )
             # Midday check
             status = AgentStatus.ONLINE if day_offset < 5 else AgentStatus.DEGRADED
             rt = 150.0 if day_offset < 5 else 500.0
-            log_health_check(conn, "test-agent", status, rt, 200, timestamp=base.replace(hour=12, minute=0))
+            log_health_check(
+                conn, "test-agent", status, rt, 200, timestamp=base.replace(hour=12, minute=0)
+            )
             # Afternoon
-            log_health_check(conn, "test-agent", AgentStatus.ONLINE, 120.0, 200, timestamp=base.replace(hour=14, minute=0))
+            log_health_check(
+                conn,
+                "test-agent",
+                AgentStatus.ONLINE,
+                120.0,
+                200,
+                timestamp=base.replace(hour=14, minute=0),
+            )
             # Evening - offline on some days
             if day_offset < 3:
-                log_health_check(conn, "test-agent", AgentStatus.ONLINE, 110.0, 200, timestamp=base.replace(hour=18, minute=0))
+                log_health_check(
+                    conn,
+                    "test-agent",
+                    AgentStatus.ONLINE,
+                    110.0,
+                    200,
+                    timestamp=base.replace(hour=18, minute=0),
+                )
             else:
-                log_health_check(conn, "test-agent", AgentStatus.OFFLINE, 0, 500, "timeout", timestamp=base.replace(hour=18, minute=0))
+                log_health_check(
+                    conn,
+                    "test-agent",
+                    AgentStatus.OFFLINE,
+                    0,
+                    500,
+                    "timeout",
+                    timestamp=base.replace(hour=18, minute=0),
+                )
 
         conn.close()
         yield tmp
@@ -193,7 +221,9 @@ class TestHealthTimeseries:
 
         # Should have response time metrics
         entry = series[0]
-        assert "avg_response_ms" in entry or "min_response_ms" in entry or "max_response_ms" in entry
+        assert (
+            "avg_response_ms" in entry or "min_response_ms" in entry or "max_response_ms" in entry
+        )
 
     def test_health_timeseries_with_unknown_bucket(self, db_with_health_data):
         """Invalid bucket name defaults to 'day'."""
@@ -217,8 +247,12 @@ class TestHealthTimeseries:
             AgentRecord(name="test-agent-2", url="http://localhost:9998", provider="custom"),
         )
         now = datetime.now(UTC)
-        log_health_check(conn, "test-agent-2", AgentStatus.ONLINE, 200.0, 200, timestamp=now - timedelta(hours=1))
-        log_health_check(conn, "test-agent-2", AgentStatus.ONLINE, 180.0, 200, timestamp=now - timedelta(hours=2))
+        log_health_check(
+            conn, "test-agent-2", AgentStatus.ONLINE, 200.0, 200, timestamp=now - timedelta(hours=1)
+        )
+        log_health_check(
+            conn, "test-agent-2", AgentStatus.ONLINE, 180.0, 200, timestamp=now - timedelta(hours=2)
+        )
 
         series = get_fleet_health_timeseries(conn, bucket="day", days=7)
         conn.close()
@@ -348,8 +382,10 @@ class TestRetention:
     def test_retention_via_env_var(self):
         """ACP_HEALTH_RETENTION_DAYS env var overrides config default."""
         import os
+
         os.environ["ACP_HEALTH_RETENTION_DAYS"] = "30"
         from agent_control_plane.retention import get_retention_days
+
         try:
             days = get_retention_days()
             assert days == 30
@@ -359,8 +395,10 @@ class TestRetention:
     def test_retention_env_var_clamped(self):
         """Env var value of 0 or negative is clamped to 1."""
         import os
+
         os.environ["ACP_HEALTH_RETENTION_DAYS"] = "0"
         from agent_control_plane.retention import get_retention_days
+
         try:
             days = get_retention_days()
             assert days >= 1
@@ -370,8 +408,10 @@ class TestRetention:
     def test_retention_invalid_env_falls_back(self):
         """Invalid env var falls through to config default."""
         import os
+
         os.environ["ACP_HEALTH_RETENTION_DAYS"] = "not-a-number"
         from agent_control_plane.retention import get_retention_days
+
         try:
             days = get_retention_days()
             assert days == 90  # default

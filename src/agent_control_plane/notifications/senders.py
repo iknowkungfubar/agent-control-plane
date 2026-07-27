@@ -203,9 +203,11 @@ def format_discord(
                     {"name": "Type", "value": alert_type, "inline": True},
                 ],
                 "footer": {"text": "Agent Control Plane"},
-                "timestamp": __import__("datetime").datetime.now(
+                "timestamp": __import__("datetime")
+                .datetime.now(
                     __import__("datetime").timezone.utc,
-                ).isoformat(),
+                )
+                .isoformat(),
             },
         ],
     }

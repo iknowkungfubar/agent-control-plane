@@ -156,7 +156,9 @@ def create_session(user_name: str) -> str:
     timestamp = int(time.time())
     payload = f"{timestamp}.{user_name}"
     signature = hmac.new(
-        secret.encode(), payload.encode(), hashlib.sha256,
+        secret.encode(),
+        payload.encode(),
+        hashlib.sha256,
     ).hexdigest()[:16]
     return f"{payload}.{signature}"
 
@@ -184,7 +186,9 @@ def validate_session(token: str) -> str | None:
     # Verify signature
     payload = f"{timestamp_str}.{user_name}"
     expected = hmac.new(
-        secret.encode(), payload.encode(), hashlib.sha256,
+        secret.encode(),
+        payload.encode(),
+        hashlib.sha256,
     ).hexdigest()[:16]
     if not hmac.compare_digest(signature, expected):
         return None

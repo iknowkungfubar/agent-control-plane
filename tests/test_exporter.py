@@ -40,6 +40,7 @@ class TestExport:
     def test_export_json_creates_file(self):
         """JSON export creates a valid JSON file."""
         from agent_control_plane.exporter import export_json
+
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "test.json"
             result = export_json(out)
@@ -51,6 +52,7 @@ class TestExport:
     def test_export_csv_creates_file(self):
         """CSV export creates a valid CSV file."""
         from agent_control_plane.exporter import export_csv
+
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "test.csv"
             result = export_csv(out)

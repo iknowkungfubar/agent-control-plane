@@ -222,7 +222,8 @@ def upsert_agent(conn: sqlite3.Connection, agent: AgentRecord) -> None:
 def get_agent(conn: sqlite3.Connection, name: str) -> AgentRecord | None:
     """Get a single agent by name."""
     row = conn.execute(
-        "SELECT * FROM agents WHERE name = ?", (name,),
+        "SELECT * FROM agents WHERE name = ?",
+        (name,),
     ).fetchone()
     return _row_to_agent(row) if row else None
 
@@ -233,7 +234,8 @@ def get_user_team_ids(conn: sqlite3.Connection, user_name: str) -> list[str]:
     if user is None or user.role == UserRole.ADMIN:
         return []  # Empty means no filter (admin sees all)
     rows = conn.execute(
-        "SELECT team_id FROM team_members WHERE user_name = ?", (user_name,),
+        "SELECT team_id FROM team_members WHERE user_name = ?",
+        (user_name,),
     ).fetchall()
     return [r["team_id"] for r in rows]
 
@@ -255,7 +257,7 @@ def list_agents(
             return []  # Empty team list means no agents visible
         placeholders = ",".join("?" for _ in team_ids)
         rows = conn.execute(
-            f"SELECT * FROM agents WHERE team_id IN ({placeholders}) ORDER BY name",
+            f"SELECT * FROM agents WHERE team_id IN ({placeholders}) ORDER BY name",  # noqa: S608
             team_ids,
         ).fetchall()
     else:
@@ -314,7 +316,9 @@ def log_health_check(
 
 
 def get_health_history(
-    conn: sqlite3.Connection, agent_name: str, limit: int = 100,
+    conn: sqlite3.Connection,
+    agent_name: str,
+    limit: int = 100,
 ) -> list[dict[str, Any]]:
     """Get health check history for an agent."""
     rows = conn.execute(
@@ -430,7 +434,8 @@ def upsert_config_baseline(conn: sqlite3.Connection, baseline: ConfigBaseline) -
 def get_config_baseline(conn: sqlite3.Connection, agent_name: str) -> ConfigBaseline | None:
     """Get the config baseline for an agent."""
     row = conn.execute(
-        "SELECT * FROM config_baselines WHERE agent_name = ?", (agent_name,),
+        "SELECT * FROM config_baselines WHERE agent_name = ?",
+        (agent_name,),
     ).fetchone()
     if row is None:
         return None
@@ -451,16 +456,18 @@ def list_config_baselines(conn: sqlite3.Connection) -> list[ConfigBaseline]:
     rows = conn.execute("SELECT * FROM config_baselines ORDER BY agent_name").fetchall()
     result: list[ConfigBaseline] = []
     for r in rows:
-        result.append(ConfigBaseline(
-            agent_name=r["agent_name"],
-            provider=r["provider"],
-            health_check_path=r["health_check_path"],
-            expected_version=r["expected_version"],
-            expected_tags=json.loads(r["expected_tags"]),
-            additional_fields=json.loads(r["additional_fields"]),
-            captured_at=datetime.fromisoformat(r["captured_at"]),
-            captured_by=r["captured_by"],
-        ))
+        result.append(
+            ConfigBaseline(
+                agent_name=r["agent_name"],
+                provider=r["provider"],
+                health_check_path=r["health_check_path"],
+                expected_version=r["expected_version"],
+                expected_tags=json.loads(r["expected_tags"]),
+                additional_fields=json.loads(r["additional_fields"]),
+                captured_at=datetime.fromisoformat(r["captured_at"]),
+                captured_by=r["captured_by"],
+            ),
+        )
     return result
 
 
@@ -480,8 +487,15 @@ def log_drift(conn: sqlite3.Connection, drift: DriftRecord) -> None:
     conn.execute(
         """INSERT INTO drift_log (agent_name, field, expected, actual, severity, message, detected_at)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (drift.agent_name, drift.field_name, drift.expected, drift.actual,
-         drift.severity, drift.message, drift.detected_at.isoformat()),
+        (
+            drift.agent_name,
+            drift.field_name,
+            drift.expected,
+            drift.actual,
+            drift.severity,
+            drift.message,
+            drift.detected_at.isoformat(),
+        ),
     )
     conn.commit()
 
@@ -505,7 +519,7 @@ def get_drift_history(
         params.append(severity)
 
     where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
-    query = f"SELECT * FROM drift_log{where} ORDER BY detected_at DESC LIMIT ? OFFSET ?"
+    query = f"SELECT * FROM drift_log{where} ORDER BY detected_at DESC LIMIT ? OFFSET ?"  # noqa: S608
     params.extend([limit, offset])
 
     rows = conn.execute(query, params).fetchall()
@@ -550,9 +564,14 @@ def upsert_user(conn: sqlite3.Connection, user: User) -> None:
                role         = excluded.role,
                api_key_hash = excluded.api_key_hash,
                last_seen    = excluded.last_seen""",
-        (user.name, user.email, user.role.value, user.api_key_hash,
-         user.created_at.isoformat(),
-         user.last_seen.isoformat() if user.last_seen else None),
+        (
+            user.name,
+            user.email,
+            user.role.value,
+            user.api_key_hash,
+            user.created_at.isoformat(),
+            user.last_seen.isoformat() if user.last_seen else None,
+        ),
     )
     conn.commit()
 
@@ -620,16 +639,28 @@ def upsert_team(conn: sqlite3.Connection, team: Team) -> None:
 def get_team(conn: sqlite3.Connection, team_id: str) -> Team | None:
     """Get a team by ID."""
     row = conn.execute("SELECT * FROM teams WHERE id = ?", (team_id,)).fetchone()
-    return Team(id=row["id"], name=row["name"], description=row["description"],
-                created_at=datetime.fromisoformat(row["created_at"])) if row else None
+    return (
+        Team(
+            id=row["id"],
+            name=row["name"],
+            description=row["description"],
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
+        if row
+        else None
+    )
 
 
 def list_teams(conn: sqlite3.Connection) -> list[Team]:
     """List all teams."""
     rows = conn.execute("SELECT * FROM teams ORDER BY name").fetchall()
     return [
-        Team(id=r["id"], name=r["name"], description=r["description"],
-             created_at=datetime.fromisoformat(r["created_at"]))
+        Team(
+            id=r["id"],
+            name=r["name"],
+            description=r["description"],
+            created_at=datetime.fromisoformat(r["created_at"]),
+        )
         for r in rows
     ]
 
@@ -669,11 +700,15 @@ def remove_team_member(conn: sqlite3.Connection, user_name: str, team_id: str) -
 def list_team_members(conn: sqlite3.Connection, team_id: str) -> list[TeamMember]:
     """List all members of a team."""
     rows = conn.execute(
-        "SELECT * FROM team_members WHERE team_id = ? ORDER BY user_name", (team_id,),
+        "SELECT * FROM team_members WHERE team_id = ? ORDER BY user_name",
+        (team_id,),
     ).fetchall()
     return [
-        TeamMember(user_name=r["user_name"], team_id=r["team_id"],
-                   role_in_team=UserRole(r["role_in_team"]))
+        TeamMember(
+            user_name=r["user_name"],
+            team_id=r["team_id"],
+            role_in_team=UserRole(r["role_in_team"]),
+        )
         for r in rows
     ]
 
@@ -688,8 +723,12 @@ def get_user_teams(conn: sqlite3.Connection, user_name: str) -> list[Team]:
         (user_name,),
     ).fetchall()
     return [
-        Team(id=r["id"], name=r["name"], description=r["description"],
-             created_at=datetime.fromisoformat(r["created_at"]))
+        Team(
+            id=r["id"],
+            name=r["name"],
+            description=r["description"],
+            created_at=datetime.fromisoformat(r["created_at"]),
+        )
         for r in rows
     ]
 
@@ -697,7 +736,8 @@ def get_user_teams(conn: sqlite3.Connection, user_name: str) -> list[Team]:
 def assign_agent_to_team(conn: sqlite3.Connection, agent_name: str, team_id: str) -> None:
     """Assign an agent to a team."""
     conn.execute(
-        "UPDATE agents SET team_id = ? WHERE name = ?", (team_id, agent_name),
+        "UPDATE agents SET team_id = ? WHERE name = ?",
+        (team_id, agent_name),
     )
     conn.commit()
 
@@ -705,7 +745,8 @@ def assign_agent_to_team(conn: sqlite3.Connection, agent_name: str, team_id: str
 def unassign_agent_from_team(conn: sqlite3.Connection, agent_name: str) -> None:
     """Remove an agent from its team assignment."""
     conn.execute(
-        "UPDATE agents SET team_id = NULL WHERE name = ?", (agent_name,),
+        "UPDATE agents SET team_id = NULL WHERE name = ?",
+        (agent_name,),
     )
     conn.commit()
 
@@ -730,8 +771,14 @@ def upsert_shadow_service(conn: sqlite3.Connection, svc: ShadowService) -> int:
             """UPDATE shadow_catalog SET
                name=?, risk=?, last_seen=?, tags=?, metadata=?
                WHERE id=?""",
-            (svc.name, svc.risk, svc.last_seen.isoformat(),
-             json.dumps(svc.tags), json.dumps(svc.metadata), existing["id"]),
+            (
+                svc.name,
+                svc.risk,
+                svc.last_seen.isoformat(),
+                json.dumps(svc.tags),
+                json.dumps(svc.metadata),
+                existing["id"],
+            ),
         )
         conn.commit()
         return existing["id"]
@@ -740,10 +787,19 @@ def upsert_shadow_service(conn: sqlite3.Connection, svc: ShadowService) -> int:
                (name, url, service_type, risk, host, port, discovered_by,
                 first_seen, last_seen, tags, metadata)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (svc.name, svc.url, svc.service_type, svc.risk,
-         svc.host, svc.port, svc.discovered_by,
-         svc.first_seen.isoformat(), svc.last_seen.isoformat(),
-         json.dumps(svc.tags), json.dumps(svc.metadata)),
+        (
+            svc.name,
+            svc.url,
+            svc.service_type,
+            svc.risk,
+            svc.host,
+            svc.port,
+            svc.discovered_by,
+            svc.first_seen.isoformat(),
+            svc.last_seen.isoformat(),
+            json.dumps(svc.tags),
+            json.dumps(svc.metadata),
+        ),
     )
     conn.commit()
     return cursor.lastrowid
@@ -768,7 +824,7 @@ def list_shadow_services(
         params.append(service_type)
 
     where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
-    query = f"SELECT * FROM shadow_catalog{where} ORDER BY last_seen DESC LIMIT ? OFFSET ?"
+    query = f"SELECT * FROM shadow_catalog{where} ORDER BY last_seen DESC LIMIT ? OFFSET ?"  # noqa: S608
     params.extend([limit, offset])
 
     rows = conn.execute(query, params).fetchall()
@@ -778,7 +834,8 @@ def list_shadow_services(
 def get_shadow_service(conn: sqlite3.Connection, service_id: int) -> ShadowService | None:
     """Get a single shadow service by ID."""
     row = conn.execute(
-        "SELECT * FROM shadow_catalog WHERE id = ?", (service_id,),
+        "SELECT * FROM shadow_catalog WHERE id = ?",
+        (service_id,),
     ).fetchone()
     return _row_to_shadow(row) if row else None
 

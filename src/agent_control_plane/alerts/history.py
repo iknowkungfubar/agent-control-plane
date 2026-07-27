@@ -63,7 +63,7 @@ def get_alert_history(
         params.append(alert_type)
 
     where_clause = (" WHERE " + " AND ".join(conditions)) if conditions else ""
-    query = f"SELECT * FROM alert_history{where_clause} ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+    query = f"SELECT * FROM alert_history{where_clause} ORDER BY timestamp DESC LIMIT ? OFFSET ?"  # noqa: S608
     params.extend([limit, offset])
 
     rows = conn.execute(query, params).fetchall()

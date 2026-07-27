@@ -33,8 +33,18 @@ def app_client() -> Generator[TestClient, None, None]:
         # Write config with mock agents
         cfg = {
             "agents": [
-                {"name": "agent-alpha", "url": "http://localhost:18080", "provider": "openai", "tags": ["prod"]},
-                {"name": "agent-beta", "url": "http://localhost:18081", "provider": "anthropic", "tags": ["staging"]},
+                {
+                    "name": "agent-alpha",
+                    "url": "http://localhost:18080",
+                    "provider": "openai",
+                    "tags": ["prod"],
+                },
+                {
+                    "name": "agent-beta",
+                    "url": "http://localhost:18081",
+                    "provider": "anthropic",
+                    "tags": ["staging"],
+                },
             ],
         }
         cfg_path = Path(tmp) / "config.yaml"
@@ -44,12 +54,15 @@ def app_client() -> Generator[TestClient, None, None]:
 
         # Populate DB via CLI scan
         from agent_control_plane.cli import main
+
         assert main(["scan"]) == 0
 
         # Create the app and wrap in TestClient
         from agent_control_plane.dashboard import create_app
+
         app = create_app()
         from starlette.testclient import TestClient
+
         client = TestClient(app)
         yield client
         client.close()
@@ -101,6 +114,7 @@ class TestDashboardE2E:
             from starlette.testclient import TestClient
 
             from agent_control_plane.dashboard import create_app
+
             app = create_app()
             client = TestClient(app)
             resp = client.get("/api/agents")
@@ -252,9 +266,14 @@ class TestDashboardE2E:
 
             # Set up agent + health data
             conn = get_connection()
-            upsert_agent(conn, AgentRecord(
-                name="test-a", url="http://localhost:1", provider="custom",
-            ))
+            upsert_agent(
+                conn,
+                AgentRecord(
+                    name="test-a",
+                    url="http://localhost:1",
+                    provider="custom",
+                ),
+            )
             now = datetime.now(UTC)
             for i in range(24):
                 ts = now.replace(hour=i % 24, minute=0) - __import__("datetime").timedelta(hours=i)
@@ -263,6 +282,7 @@ class TestDashboardE2E:
 
             app = create_app()
             from starlette.testclient import TestClient
+
             client = TestClient(app)
 
             # Fleet health

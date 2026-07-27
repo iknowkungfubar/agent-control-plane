@@ -103,21 +103,34 @@ def export_csv(output_path: Path) -> Path:
 
     with open(output_path, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["name", "url", "provider", "status", "tags",
-                         "first_seen", "last_seen", "total_checks",
-                         "successful_checks", "avg_response_time_ms"])
+        writer.writerow(
+            [
+                "name",
+                "url",
+                "provider",
+                "status",
+                "tags",
+                "first_seen",
+                "last_seen",
+                "total_checks",
+                "successful_checks",
+                "avg_response_time_ms",
+            ],
+        )
         for agent in data["agents"]:
-            writer.writerow([
-                agent["name"],
-                agent["url"],
-                agent["provider"],
-                agent["status"],
-                ";".join(agent["tags"]),
-                agent["first_seen"],
-                agent["last_seen"],
-                agent["total_checks"],
-                agent["successful_checks"],
-                agent["avg_response_time_ms"],
-            ])
+            writer.writerow(
+                [
+                    agent["name"],
+                    agent["url"],
+                    agent["provider"],
+                    agent["status"],
+                    ";".join(agent["tags"]),
+                    agent["first_seen"],
+                    agent["last_seen"],
+                    agent["total_checks"],
+                    agent["successful_checks"],
+                    agent["avg_response_time_ms"],
+                ],
+            )
 
     return output_path

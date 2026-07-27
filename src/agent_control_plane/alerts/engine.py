@@ -27,6 +27,7 @@ def _reset_state() -> None:
 def _reset_config_cache() -> None:
     """Reset config cache (for testing)."""
     from agent_control_plane.alerts.rules import _config_cache
+
     _config_cache.clear()
 
 
@@ -38,6 +39,7 @@ def _get_previous_status(agent_name: str) -> AgentStatus:
     conn = None
     try:
         from agent_control_plane.inventory import get_connection
+
         conn = get_connection()
         record = get_agent(conn, agent_name)
         if record:
@@ -88,7 +90,10 @@ def evaluate_alerts(agent_name: str, new_status: AgentStatus) -> list[dict[str, 
             _consecutive_failures[agent_name] = 0
 
     rules = get_agent_alert_rules(agent_name)
-    threshold = rules.get("consecutive_failures", cfg.get("global", {}).get("consecutive_failures", 3))
+    threshold = rules.get(
+        "consecutive_failures",
+        cfg.get("global", {}).get("consecutive_failures", 3),
+    )
     rules.get("rate_limit_seconds", cfg.get("global", {}).get("rate_limit_seconds", 300))
 
     now = datetime.now(UTC).isoformat()
@@ -97,46 +102,54 @@ def evaluate_alerts(agent_name: str, new_status: AgentStatus) -> list[dict[str, 
     if prev_status != new_status:
         # Machine-readable type for dedup and routing
         if prev_status == AgentStatus.ONLINE and new_status == AgentStatus.OFFLINE:
-            alerts.append({
-                "type": "DOWN",
-                "agent_name": agent_name,
-                "status": "offline",
-                "message": f"Agent '{agent_name}' went offline (was online)",
-                "timestamp": now,
-            })
+            alerts.append(
+                {
+                    "type": "DOWN",
+                    "agent_name": agent_name,
+                    "status": "offline",
+                    "message": f"Agent '{agent_name}' went offline (was online)",
+                    "timestamp": now,
+                },
+            )
         elif prev_status == AgentStatus.ONLINE and new_status == AgentStatus.DEGRADED:
-            alerts.append({
-                "type": "DEGRADED",
-                "agent_name": agent_name,
-                "status": "degraded",
-                "message": f"Agent '{agent_name}' degraded (was online)",
-                "timestamp": now,
-            })
-        elif prev_status in (AgentStatus.OFFLINE, AgentStatus.DEGRADED) and new_status == AgentStatus.ONLINE:
-            alerts.append({
-                "type": "RECOVERY",
-                "agent_name": agent_name,
-                "status": "online",
-                "message": f"Agent '{agent_name}' recovered ({prev_status.value} → online)",
-                "timestamp": now,
-            })
+            alerts.append(
+                {
+                    "type": "DEGRADED",
+                    "agent_name": agent_name,
+                    "status": "degraded",
+                    "message": f"Agent '{agent_name}' degraded (was online)",
+                    "timestamp": now,
+                },
+            )
+        elif (
+            prev_status in (AgentStatus.OFFLINE, AgentStatus.DEGRADED)
+            and new_status == AgentStatus.ONLINE
+        ):
+            alerts.append(
+                {
+                    "type": "RECOVERY",
+                    "agent_name": agent_name,
+                    "status": "online",
+                    "message": f"Agent '{agent_name}' recovered ({prev_status.value} → online)",
+                    "timestamp": now,
+                },
+            )
 
     # Check for consecutive failure threshold
     consecutive = _consecutive_failures.get(agent_name, 0)
     if consecutive >= threshold and consecutive > 1:
         # Check we haven't already alerted for this threshold crossing
-        prev_already = any(
-            a["type"] == "DOWN" and a["agent_name"] == agent_name
-            for a in alerts
-        )
+        prev_already = any(a["type"] == "DOWN" and a["agent_name"] == agent_name for a in alerts)
         if not prev_already and new_status in (AgentStatus.OFFLINE, AgentStatus.DEGRADED):
-            alerts.append({
-                "type": "DOWN",
-                "agent_name": agent_name,
-                "status": new_status.value,
-                "message": f"Agent '{agent_name}' has {consecutive} consecutive failures (threshold: {threshold})",
-                "timestamp": now,
-            })
+            alerts.append(
+                {
+                    "type": "DOWN",
+                    "agent_name": agent_name,
+                    "status": new_status.value,
+                    "message": f"Agent '{agent_name}' has {consecutive} consecutive failures (threshold: {threshold})",
+                    "timestamp": now,
+                },
+            )
 
     return alerts
 
@@ -147,6 +160,7 @@ def dispatch_alerts(alerts: list[dict[str, Any]]) -> None:
         return
 
     from agent_control_plane.alerts.rules import load_alert_config
+
     cfg = load_alert_config()
     channels = cfg.get("channels", {})
     rate_limit = cfg.get("global", {}).get("rate_limit_seconds", 300)
@@ -192,12 +206,16 @@ def dispatch_drift_alert(
 
     """
     from agent_control_plane.alerts.rules import get_agent_alert_rules, load_alert_config
+
     cfg = load_alert_config()
     if not cfg.get("enabled", True):
         return
 
     rules = get_agent_alert_rules(agent_name)
-    rate_limit = rules.get("rate_limit_seconds", cfg.get("global", {}).get("rate_limit_seconds", 300))
+    rate_limit = rules.get(
+        "rate_limit_seconds",
+        cfg.get("global", {}).get("rate_limit_seconds", 300),
+    )
 
     now = datetime.now(UTC).isoformat()
 
@@ -228,6 +246,7 @@ def _dispatch_webhook(url: str, alert: dict[str, Any]) -> None:
     if not url or url == "http://localhost:0/placeholder":
         return
     import httpx
+
     with httpx.Client(timeout=10) as client:
         client.post(url, json=alert)
 
@@ -238,6 +257,7 @@ def _dispatch_slack(channel_cfg: dict, alert: dict[str, Any]) -> None:
     if not url:
         return
     from agent_control_plane.alerts.notifications import format_slack
+
     payload = format_slack(
         alert_type=alert["type"],
         agent_name=alert["agent_name"],
@@ -245,6 +265,7 @@ def _dispatch_slack(channel_cfg: dict, alert: dict[str, Any]) -> None:
         message=alert["message"],
     )
     import httpx
+
     with httpx.Client(timeout=10) as client:
         client.post(url, json=payload)
 
@@ -255,6 +276,7 @@ def _dispatch_email(channel_cfg: dict, alert: dict[str, Any]) -> None:
     if not recipients:
         return
     from agent_control_plane.alerts.notifications import format_email, send_email
+
     subject, body = format_email(
         alert_type=alert["type"],
         agent_name=alert["agent_name"],

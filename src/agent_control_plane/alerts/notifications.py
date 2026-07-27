@@ -71,19 +71,19 @@ def format_email(
     subject = f"{emoji} [ACP Alert] {alert_type} — {agent_name}"
 
     body = f"""
-{'='*60}
+{"=" * 60}
 AGENT CONTROL PLANE — ALERT
-{'='*60}
+{"=" * 60}
 
 Type:    {alert_type}
 Agent:   {agent_name}
 Status:  {status}
-Time:    {__import__('datetime').datetime.now().isoformat()}
+Time:    {__import__("datetime").datetime.now().isoformat()}
 
 Message:
 {message}
 
-{'='*60}
+{"=" * 60}
 This is an automated notification from Agent Control Plane.
 """
 

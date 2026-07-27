@@ -61,7 +61,7 @@ def get_retention_days() -> int:
         cfg_days = cfg.get("health_log_retention_days", 90)
         if isinstance(cfg_days, int) and cfg_days > 0:
             return cfg_days
-    except (FileNotFoundError, Exception):
+    except (FileNotFoundError, ValueError, TypeError):
         pass
 
     return 90

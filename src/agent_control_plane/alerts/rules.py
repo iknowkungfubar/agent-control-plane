@@ -35,6 +35,7 @@ def load_alert_config() -> dict[str, Any]:
 
     try:
         from agent_control_plane.config import load_config
+
         cfg = load_config()
         alerts_cfg = cfg.get("alerts", defaults)
         # Merge with defaults for missing keys
@@ -46,7 +47,7 @@ def load_alert_config() -> dict[str, Any]:
             result["channels"].update(alerts_cfg["channels"])
         _config_cache[cache_key] = result
         return result
-    except Exception:
+    except (FileNotFoundError, ValueError, TypeError):
         return dict(defaults)
 
 
@@ -64,10 +65,11 @@ def get_agent_alert_rules(agent_name: str) -> dict[str, Any]:
     """
     try:
         from agent_control_plane.config import load_config
+
         cfg = load_config()
         for agent in cfg.get("agents", []):
             if agent.get("name") == agent_name:
                 return agent.get("alerts", {})
-    except Exception:
+    except (KeyError, TypeError, ValueError):
         pass
     return {}

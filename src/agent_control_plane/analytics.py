@@ -52,7 +52,7 @@ def get_health_timeseries(
           AND timestamp >= datetime('now', '-' || ? || ' days', 'utc')
         GROUP BY bucket
         ORDER BY bucket ASC
-    """
+    """  # noqa: S608
     rows = conn.execute(query, (agent_name, str(days))).fetchall()
     return [dict(r) for r in rows]
 
@@ -91,7 +91,7 @@ def get_fleet_health_timeseries(
         WHERE timestamp >= datetime('now', '-' || ? || ' days', 'utc')
         GROUP BY bucket
         ORDER BY bucket ASC
-    """
+    """  # noqa: S608
     rows = conn.execute(query, (str(days),)).fetchall()
     return [dict(r) for r in rows]
 
@@ -165,6 +165,7 @@ def _validate_bucket(bucket: str) -> None:
     """Warn on invalid bucket (silently default to 'day' for resilience)."""
     if bucket not in ("hour", "day", "week"):
         import warnings
+
         warnings.warn(f"Invalid bucket: '{bucket}'. Defaulting to 'day'.", stacklevel=2)
 
 

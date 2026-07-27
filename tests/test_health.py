@@ -20,6 +20,7 @@ class _HealthHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         import json
+
         if self.path == "/health":
             data = json.dumps({"status": "ok"}).encode()
             self.send_response(200)
@@ -46,6 +47,7 @@ class _HealthHandler(BaseHTTPRequestHandler):
 def health_port() -> Generator[int, None, None]:
     """Start a health check test server."""
     import socket
+
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
@@ -65,6 +67,7 @@ class TestCheckAgentHealth:
     def test_online_agent(self, health_port: int):
         """Healthy agent returns ONLINE status."""
         from agent_control_plane.health import check_agent_health
+
         endpoint = AgentEndpoint(name="healthy", url=f"http://127.0.0.1:{health_port}")
         status, elapsed, code, error = check_agent_health(endpoint)
         assert status == AgentStatus.ONLINE
@@ -75,6 +78,7 @@ class TestCheckAgentHealth:
     def test_offline_unreachable(self):
         """Unreachable agent returns OFFLINE."""
         from agent_control_plane.health import check_agent_health
+
         endpoint = AgentEndpoint(name="offline", url="http://127.0.0.1:1")
         status, _elapsed, _code, error = check_agent_health(endpoint, timeout=1)
         assert status == AgentStatus.OFFLINE
@@ -83,8 +87,10 @@ class TestCheckAgentHealth:
     def test_http_error(self, health_port: int):
         """Agent returning 5xx is DEGRADED."""
         from agent_control_plane.health import check_agent_health
+
         endpoint = AgentEndpoint(
-            name="err-agent", url=f"http://127.0.0.1:{health_port}",
+            name="err-agent",
+            url=f"http://127.0.0.1:{health_port}",
             health_check_path="/error",
         )
         status, _elapsed, code, _error = check_agent_health(endpoint)
@@ -94,8 +100,10 @@ class TestCheckAgentHealth:
     def test_timeout(self, health_port: int):
         """Slow agent triggers timeout OFFLINE."""
         from agent_control_plane.health import check_agent_health
+
         endpoint = AgentEndpoint(
-            name="slow", url=f"http://127.0.0.1:{health_port}",
+            name="slow",
+            url=f"http://127.0.0.1:{health_port}",
             health_check_path="/slow",
         )
         status, _elapsed, _code, error = check_agent_health(endpoint, timeout=1)
@@ -108,11 +116,13 @@ class TestRollingAvg:
 
     def test_rolling_avg(self):
         from agent_control_plane.health import _rolling_avg
+
         avg = _rolling_avg(100.0, 5, 50.0)
         # (100*5 + 50) / 6 = 91.67
         assert round(avg, 2) == 91.67
 
     def test_rolling_avg_first_value(self):
         from agent_control_plane.health import _rolling_avg
+
         avg = _rolling_avg(0, 0, 150.0)
         assert avg == 150.0

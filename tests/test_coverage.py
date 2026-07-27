@@ -61,6 +61,7 @@ class _DegradedHandler(BaseHTTPRequestHandler):
 def degraded_port() -> Generator[int, None, None]:
     """Server returning degraded health status."""
     import socket
+
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
@@ -78,6 +79,7 @@ class TestCoverageHealth:
     def test_degraded_detection(self, degraded_port: int):
         """Agent returning 'degraded' status in JSON is detected."""
         from agent_control_plane.health import check_agent_health
+
         ep = AgentEndpoint(name="deg", url=f"http://127.0.0.1:{degraded_port}")
         status, _elapsed, _code, _error = check_agent_health(ep)
         assert status.value == "degraded"
@@ -88,6 +90,7 @@ class TestCoverageHealth:
         import socket
 
         from agent_control_plane.health import check_agent_health
+
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
@@ -96,6 +99,7 @@ class TestCoverageHealth:
 
         def _respond():
             import time
+
             time.sleep(0.1)
             conn, _ = s.accept()
             conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello")
@@ -110,7 +114,10 @@ class TestCoverageHealth:
     def test_unexpected_status_code(self, degraded_port: int):
         """Non-200 but <500 status code shows as degraded."""
         from agent_control_plane.health import check_agent_health
-        ep = AgentEndpoint(name="notfound", url=f"http://127.0.0.1:{degraded_port}", health_check_path="/nope")
+
+        ep = AgentEndpoint(
+            name="notfound", url=f"http://127.0.0.1:{degraded_port}", health_check_path="/nope"
+        )
         status, _, code, _ = check_agent_health(ep)
         assert status.value == "degraded"
         assert code == 404
@@ -122,6 +129,7 @@ class TestCoverageCost:
     def test_record_and_retrieve_cost(self):
         """record_cost persists and get_all_costs retrieves."""
         from agent_control_plane.cost_tracker import get_all_costs, record_cost, total_monthly_cost
+
         record_cost("cost-test", "openai", 500000, 100000)
         records = get_all_costs()
         assert len(records) == 1
@@ -139,10 +147,15 @@ class TestCoverageCost:
 
         # Use direct DB insert for a different month
         conn = get_connection()
-        upsert_cost_record(conn, CostRecord(
-            agent_name="old", month="2026-01", estimated_cost_usd=50.0,
-            last_updated=datetime.now(UTC),
-        ))
+        upsert_cost_record(
+            conn,
+            CostRecord(
+                agent_name="old",
+                month="2026-01",
+                estimated_cost_usd=50.0,
+                last_updated=datetime.now(UTC),
+            ),
+        )
         conn.close()
 
         record_cost("new", "anthropic", 100000, 50000)
@@ -155,6 +168,7 @@ class TestCoverageCost:
             PROVIDER_COST_PER_1K_IN,
             PROVIDER_COST_PER_1K_OUT,
         )
+
         for provider, rate in PROVIDER_COST_PER_1K_IN.items():
             assert rate >= 0, f"Negative in rate for {provider}"
         for provider, rate in PROVIDER_COST_PER_1K_OUT.items():
@@ -167,6 +181,7 @@ class TestCoverageCLI:
     def test_delete_nonexistent(self):
         """Delete non-existent agent doesn't crash."""
         from agent_control_plane.cli import main
+
         rc = main(["delete", "ghost-agent"])
         assert rc == 0
 
@@ -208,5 +223,6 @@ class TestCoverageDiscovery:
     def test_sync_inventory_file_not_found(self):
         """sync_inventory with no config raises FileNotFoundError."""
         from agent_control_plane.discovery import sync_inventory
+
         with pytest.raises(FileNotFoundError):
             sync_inventory()

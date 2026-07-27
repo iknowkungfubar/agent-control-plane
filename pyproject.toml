@@ -80,6 +80,10 @@ ignore = [
     "TD003",  # todo without issue
     "TRY003", # long exception message
     "G004",   # f-string in log
+    "COM812", # conflicts with formatter
+    "ANN202", # missing return type on private functions (pervasive)
+    "CPY001", # copyright notices (not useful for internal files)
+    "E501",   # line too long (100 is strict; pre-existing)
 ]
 
 [tool.ruff.lint.per-file-ignores]

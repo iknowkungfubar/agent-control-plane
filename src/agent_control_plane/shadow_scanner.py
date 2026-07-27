@@ -86,7 +86,7 @@ def probe_service(
                 }
         except (httpx.ConnectError, httpx.TimeoutException, httpx.RequestError):
             continue
-        except Exception:
+        except Exception:  # noqa: BLE001, S112
             continue
 
     # No fingerprint match, but something responded

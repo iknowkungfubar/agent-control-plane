@@ -538,7 +538,8 @@ def match_fingerprint(
         if fp["header_patterns"]:
             header_match = all(
                 h.lower() in headers and v.lower() in headers.get(h, "").lower()
-                if v else h.lower() in headers
+                if v
+                else h.lower() in headers
                 for h, v in fp["header_patterns"].items()
             )
             if not header_match:

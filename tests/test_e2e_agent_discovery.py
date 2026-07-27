@@ -31,6 +31,7 @@ CLI_ENTRY = [sys.executable, "-m", "agent_control_plane.cli"]
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 class _MockAgentHandler(BaseHTTPRequestHandler):
     """Simple HTTP handler that simulates an agent endpoint."""
 
@@ -40,11 +41,14 @@ class _MockAgentHandler(BaseHTTPRequestHandler):
         elif self.path == "/ready":
             self._respond(200, {"status": "ready"})
         elif self.path == "/metrics":
-            self._respond(200, {
-                "tokens_in": 150000,
-                "tokens_out": 45000,
-                "requests_total": 1200,
-            })
+            self._respond(
+                200,
+                {
+                    "tokens_in": 150000,
+                    "tokens_out": 45000,
+                    "requests_total": 1200,
+                },
+            )
         else:
             self._respond(404, {"error": "not found"})
 
@@ -96,6 +100,7 @@ class _DegradedHandler(BaseHTTPRequestHandler):
 def _free_port() -> int:
     """Find a free port on localhost."""
     import socket
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
@@ -142,7 +147,9 @@ class TestE2EWorkflow:
     """End-to-end test of the full Agent Control Plane workflow."""
 
     def test_e2e_full_workflow(
-        self, temp_home: Path, mock_agent_server: int,
+        self,
+        temp_home: Path,
+        mock_agent_server: int,
     ) -> None:
         """Complete user workflow: init → scan → list → health → export.
 
@@ -168,6 +175,7 @@ class TestE2EWorkflow:
 
         cfg_file = temp_home / "config.yaml"
         import yaml
+
         with open(cfg_file, "w") as f:
             yaml.dump(test_cfg, f)
 
@@ -178,16 +186,23 @@ class TestE2EWorkflow:
         # Step 1: Scan — discover and register agents
         result = subprocess.run(
             [*CLI_ENTRY, "scan"],
-            capture_output=True, text=True, timeout=30, env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=env,
         )
         assert result.returncode == 0, f"scan failed: {result.stderr}"
-        assert "2 agents" in result.stdout.lower() or "2" in result.stdout, \
+        assert "2 agents" in result.stdout.lower() or "2" in result.stdout, (
             f"Expected 2 agents discovered, got: {result.stdout}"
+        )
 
         # Step 2: List — show inventory
         result = subprocess.run(
             [*CLI_ENTRY, "list"],
-            capture_output=True, text=True, timeout=15, env=env,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            env=env,
         )
         assert result.returncode == 0, f"list failed: {result.stderr}"
         assert "test-agent-1" in result.stdout
@@ -196,7 +211,10 @@ class TestE2EWorkflow:
         # Step 3: Health — ping all agents
         result = subprocess.run(
             [*CLI_ENTRY, "health"],
-            capture_output=True, text=True, timeout=15, env=env,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            env=env,
         )
         assert result.returncode == 0, f"health failed: {result.stderr}"
         assert "online" in result.stdout.lower() or "ok" in result.stdout.lower()
@@ -204,7 +222,10 @@ class TestE2EWorkflow:
         # Step 4: Cost — show cost estimates
         result = subprocess.run(
             [*CLI_ENTRY, "cost"],
-            capture_output=True, text=True, timeout=15, env=env,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            env=env,
         )
         assert result.returncode == 0, f"cost failed: {result.stderr}"
 
@@ -212,7 +233,10 @@ class TestE2EWorkflow:
         json_out = temp_home / "export.json"
         result = subprocess.run(
             [*CLI_ENTRY, "export", "--format", "json", "--output", str(json_out)],
-            capture_output=True, text=True, timeout=15, env=env,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            env=env,
         )
         assert result.returncode == 0, f"export json failed: {result.stderr}"
         assert json_out.exists()
@@ -224,7 +248,10 @@ class TestE2EWorkflow:
         csv_out = temp_home / "export.csv"
         result = subprocess.run(
             [*CLI_ENTRY, "export", "--format", "csv", "--output", str(csv_out)],
-            capture_output=True, text=True, timeout=15, env=env,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            env=env,
         )
         assert result.returncode == 0, f"export csv failed: {result.stderr}"
         assert csv_out.exists()
@@ -233,7 +260,9 @@ class TestE2EWorkflow:
         assert "status" in csv_content.lower()
 
     def test_e2e_degraded_agent_detection(
-        self, temp_home: Path, degraded_agent_server: int,
+        self,
+        temp_home: Path,
+        degraded_agent_server: int,
     ) -> None:
         """E2E test: system correctly detects and reports degraded agents."""
         test_cfg = {
@@ -247,6 +276,7 @@ class TestE2EWorkflow:
         }
 
         import yaml
+
         cfg_file = temp_home / "config.yaml"
         with open(cfg_file, "w") as f:
             yaml.dump(test_cfg, f)
@@ -258,25 +288,33 @@ class TestE2EWorkflow:
         # Scan
         result = subprocess.run(
             [*CLI_ENTRY, "scan"],
-            capture_output=True, text=True, timeout=30, env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=env,
         )
         assert result.returncode == 0
 
         # Health check — the degraded server has slow and error responses
         result = subprocess.run(
             [*CLI_ENTRY, "health", "--timeout", "1"],
-            capture_output=True, text=True, timeout=30, env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=env,
         )
         assert result.returncode == 0
         # Should report at least some checks as degraded or offline
-        assert any(w in result.stdout.lower() for w in ["degraded", "offline", "timeout", "error"]), \
-            f"Expected degraded detection, got: {result.stdout}"
+        assert any(
+            w in result.stdout.lower() for w in ["degraded", "offline", "timeout", "error"]
+        ), f"Expected degraded detection, got: {result.stdout}"
 
     def test_e2e_empty_config(self, temp_home: Path) -> None:
         """E2E test: system handles empty configuration gracefully."""
         test_cfg = {"agents": []}
 
         import yaml
+
         cfg_file = temp_home / "config.yaml"
         with open(cfg_file, "w") as f:
             yaml.dump(test_cfg, f)
@@ -287,13 +325,15 @@ class TestE2EWorkflow:
 
         result = subprocess.run(
             [*CLI_ENTRY, "list"],
-            capture_output=True, text=True, timeout=15, env=env,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            env=env,
         )
         assert result.returncode == 0
         # Should say "no agents" or show 0
         assert any(
-            w in result.stdout.lower()
-            for w in ["no agents", "0 agents", "none", "empty"]
+            w in result.stdout.lower() for w in ["no agents", "0 agents", "none", "empty"]
         ), f"Expected empty state message, got: {result.stdout}"
 
     def test_e2e_list_with_no_config(self, temp_home: Path) -> None:
@@ -304,7 +344,10 @@ class TestE2EWorkflow:
 
         result = subprocess.run(
             [*CLI_ENTRY, "list"],
-            capture_output=True, text=True, timeout=15, env=env,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            env=env,
         )
         # Should exit non-zero with a helpful error message
         assert result.returncode == 0
@@ -327,6 +370,7 @@ class TestE2EWorkflow:
         }
 
         import yaml
+
         cfg_file = temp_home / "config.yaml"
         with open(cfg_file, "w") as f:
             yaml.dump(test_cfg, f)
@@ -338,14 +382,20 @@ class TestE2EWorkflow:
         # Scan should still succeed but show agent as offline
         result = subprocess.run(
             [*CLI_ENTRY, "scan"],
-            capture_output=True, text=True, timeout=15, env=env,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            env=env,
         )
         assert result.returncode == 0
 
         # Health should show it as offline
         result = subprocess.run(
             [*CLI_ENTRY, "health"],
-            capture_output=True, text=True, timeout=15, env=env,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            env=env,
         )
         assert result.returncode == 0
         assert any(
@@ -367,6 +417,7 @@ class TestE2EWorkflow:
         }
 
         import yaml
+
         cfg_file = temp_home / "config.yaml"
         with open(cfg_file, "w") as f:
             yaml.dump(test_cfg, f)
@@ -382,7 +433,10 @@ class TestE2EWorkflow:
         # Status command
         result = subprocess.run(
             [*CLI_ENTRY, "status"],
-            capture_output=True, text=True, timeout=15, env=env,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            env=env,
         )
         assert result.returncode == 0
         # Should show summary stats

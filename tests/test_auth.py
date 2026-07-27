@@ -28,6 +28,7 @@ class TestAuth:
     def test_generate_api_key_format(self):
         """API keys start with acp_ and are 68 chars."""
         from agent_control_plane.auth import generate_api_key
+
         key = generate_api_key()
         assert key.startswith("acp_")
         assert len(key) == 68  # "acp_" + 64 hex chars from secrets.token_hex(32)
@@ -35,6 +36,7 @@ class TestAuth:
     def test_hash_api_key(self):
         """Hash is deterministic and 64 hex chars."""
         from agent_control_plane.auth import hash_api_key
+
         key = "acp_test_key_123"
         h = hash_api_key(key)
         assert len(h) == 64  # SHA-256 hex
@@ -43,6 +45,7 @@ class TestAuth:
     def test_verify_api_key(self):
         """Verify matches correct key."""
         from agent_control_plane.auth import generate_api_key, hash_api_key, verify_api_key
+
         key = generate_api_key()
         h = hash_api_key(key)
         assert verify_api_key(key, h) is True
@@ -51,6 +54,7 @@ class TestAuth:
     def test_verify_constant_time(self):
         """Verify uses constant-time comparison."""
         from agent_control_plane.auth import hash_api_key, verify_api_key
+
         h = hash_api_key("acp_real_key")
         assert verify_api_key("acp_real_key", h) is True
         assert verify_api_key("acp_fake_key", h) is False
@@ -58,6 +62,7 @@ class TestAuth:
     def test_create_session_and_validate(self):
         """Session token is valid and contains user name."""
         from agent_control_plane.auth import create_session, validate_session
+
         token = create_session("testuser")
         assert len(token.split(".")) == 3
         assert validate_session(token) == "testuser"
@@ -69,6 +74,7 @@ class TestAuth:
         import time
 
         from agent_control_plane.auth import validate_session
+
         old_ts = int(time.time()) - 90000  # > 24h ago
         payload = f"{old_ts}.expired_user"
         sig = hmac.new(b"test", payload.encode(), hashlib.sha256).hexdigest()[:16]
@@ -79,6 +85,7 @@ class TestAuth:
     def test_validate_malformed_token(self):
         """Malformed session token returns None."""
         from agent_control_plane.auth import validate_session
+
         assert validate_session("not-enough-parts") is None
         assert validate_session("no.dots") is None
         assert validate_session("") is None
@@ -86,6 +93,7 @@ class TestAuth:
     def test_validate_invalid_timestamp(self):
         """Token with non-numeric timestamp returns None."""
         from agent_control_plane.auth import validate_session
+
         assert validate_session("abc.user.sig") is None
 
     def test_validate_tampered_signature(self):
@@ -93,12 +101,14 @@ class TestAuth:
         import time
 
         from agent_control_plane.auth import validate_session
+
         ts = int(time.time())
         assert validate_session(f"{ts}.realuser.wrongsig") is None
 
     def test_get_session_user_invalid_token(self):
         """get_session_user with invalid token returns None."""
         from agent_control_plane.auth import get_session_user
+
         assert get_session_user("invalid.token.here") is None
         assert get_session_user("") is None
 
@@ -112,6 +122,7 @@ class TestAuth:
 def conn(tmp_path: Path) -> sqlite3.Connection:
     """Create temp database for testing."""
     from agent_control_plane.inventory import get_connection
+
     os.environ["ACP_HOME"] = str(tmp_path)
     return get_connection()
 
@@ -122,8 +133,13 @@ class TestUserCRUD:
         from agent_control_plane.inventory import get_user, upsert_user
 
         now = datetime.now(UTC)
-        user = User(name="testuser", email="test@example.com", role=UserRole.ADMIN,
-                     api_key_hash="abc123", created_at=now)
+        user = User(
+            name="testuser",
+            email="test@example.com",
+            role=UserRole.ADMIN,
+            api_key_hash="abc123",
+            created_at=now,
+        )
         upsert_user(conn, user)
 
         retrieved = get_user(conn, "testuser")
@@ -179,6 +195,7 @@ class TestUserCRUD:
     def test_check_single_user_mode_true(self, conn):
         """check_single_user_mode returns True when no users exist."""
         from agent_control_plane.inventory import check_single_user_mode
+
         assert check_single_user_mode(conn) is True
 
     def test_check_single_user_mode_false(self, conn):
@@ -196,7 +213,9 @@ class TestTeamCRUD:
         from agent_control_plane.inventory import get_team, upsert_team
 
         now = datetime.now(UTC)
-        upsert_team(conn, Team(id="infra", name="Infrastructure", description="Infra team", created_at=now))
+        upsert_team(
+            conn, Team(id="infra", name="Infrastructure", description="Infra team", created_at=now)
+        )
 
         team = get_team(conn, "infra")
         assert team is not None
@@ -225,8 +244,16 @@ class TestTeamCRUD:
         conn.execute(
             "INSERT INTO agents (name, url, provider, status, tags, team_id, first_seen, last_seen) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            ("agent1", "http://localhost:1", "custom", "unknown", "[]",
-             "delteam", now.isoformat(), now.isoformat()),
+            (
+                "agent1",
+                "http://localhost:1",
+                "custom",
+                "unknown",
+                "[]",
+                "delteam",
+                now.isoformat(),
+                now.isoformat(),
+            ),
         )
         conn.commit()
 
@@ -247,8 +274,9 @@ class TestTeamCRUD:
         now = datetime.now(UTC)
         upsert_user(conn, User(name="member1", email="m@t.com", created_at=now))
         upsert_team(conn, Team(id="mt", name="Member Team", created_at=now))
-        add_team_member(conn, TeamMember(user_name="member1", team_id="mt",
-                                          role_in_team=UserRole.OPERATOR))
+        add_team_member(
+            conn, TeamMember(user_name="member1", team_id="mt", role_in_team=UserRole.OPERATOR)
+        )
 
         members = list_team_members(conn, "mt")
         assert len(members) == 1
@@ -269,8 +297,15 @@ class TestTeamCRUD:
         conn.execute(
             "INSERT INTO agents (name, url, provider, status, tags, first_seen, last_seen) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            ("assign-agent", "http://localhost:2", "custom", "unknown",
-             "[]", now.isoformat(), now.isoformat()),
+            (
+                "assign-agent",
+                "http://localhost:2",
+                "custom",
+                "unknown",
+                "[]",
+                now.isoformat(),
+                now.isoformat(),
+            ),
         )
         conn.commit()
 
@@ -292,14 +327,12 @@ class TestTeamScopedQueries:
         conn.execute(
             "INSERT INTO agents (name, url, provider, status, tags, team_id, first_seen, last_seen) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            ("team-a-agent", "http://localhost:1", "custom", "unknown", "[]",
-             "team-a", now, now),
+            ("team-a-agent", "http://localhost:1", "custom", "unknown", "[]", "team-a", now, now),
         )
         conn.execute(
             "INSERT INTO agents (name, url, provider, status, tags, team_id, first_seen, last_seen) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            ("team-b-agent", "http://localhost:2", "custom", "unknown", "[]",
-             "team-b", now, now),
+            ("team-b-agent", "http://localhost:2", "custom", "unknown", "[]", "team-b", now, now),
         )
         conn.commit()
 
@@ -318,8 +351,7 @@ class TestTeamScopedQueries:
         conn.execute(
             "INSERT INTO agents (name, url, provider, status, tags, team_id, first_seen, last_seen) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            ("orphan", "http://localhost:1", "custom", "unknown", "[]",
-             "some-team", now, now),
+            ("orphan", "http://localhost:1", "custom", "unknown", "[]", "some-team", now, now),
         )
         conn.commit()
 
@@ -335,8 +367,9 @@ class TestTeamScopedQueries:
         from agent_control_plane.models import UserRole
 
         now = datetime.now(UTC)
-        upsert_user(conn, User(name="bigcheese", email="boss@t.com",
-                                role=UserRole.ADMIN, created_at=now))
+        upsert_user(
+            conn, User(name="bigcheese", email="boss@t.com", role=UserRole.ADMIN, created_at=now)
+        )
         team_ids = get_user_team_ids(conn, "bigcheese")
         assert team_ids == []  # Empty = admin sees all
 
@@ -351,8 +384,9 @@ class TestTeamScopedQueries:
         from agent_control_plane.models import UserRole
 
         now = datetime.now(UTC)
-        upsert_user(conn, User(name="opuser", email="op@t.com",
-                                role=UserRole.OPERATOR, created_at=now))
+        upsert_user(
+            conn, User(name="opuser", email="op@t.com", role=UserRole.OPERATOR, created_at=now)
+        )
         upsert_team(conn, Team(id="op-team", name="OP Team", created_at=now))
         add_team_member(conn, TeamMember(user_name="opuser", team_id="op-team"))
 
@@ -394,6 +428,7 @@ class TestAuthIntegration:
     def test_create_user_and_authenticate(self, tmp_path):
         """Create user with API key, then authenticate via email + key."""
         import os
+
         os.environ["ACP_HOME"] = str(tmp_path)
         from agent_control_plane.auth import (
             authenticate_api_key,
@@ -422,6 +457,7 @@ class TestAuthIntegration:
     def test_single_user_mode_auth(self, tmp_path):
         """No users means single-user mode returns guest admin."""
         import os
+
         os.environ["ACP_HOME"] = str(tmp_path)
         from agent_control_plane.auth import authenticate_api_key, authenticate_email
 
@@ -437,6 +473,7 @@ class TestAuthIntegration:
     def test_session_flow(self, tmp_path):
         """Full session lifecycle."""
         import os
+
         os.environ["ACP_HOME"] = str(tmp_path)
         from agent_control_plane.auth import (
             create_session,
@@ -455,6 +492,7 @@ class TestAuthIntegration:
     def test_get_session_user_real_user(self, tmp_path):
         """get_session_user works with a real user session."""
         import os
+
         os.environ["ACP_HOME"] = str(tmp_path)
         from agent_control_plane.auth import (
             create_session,
@@ -476,20 +514,24 @@ class TestDashboardAuthAPI:
     @pytest.fixture
     def client(self, tmp_path):
         import os
+
         os.environ["ACP_HOME"] = str(tmp_path)
 
         from fastapi.testclient import TestClient
 
         from agent_control_plane.dashboard import create_app
+
         app = create_app()
         return TestClient(app)
 
     def test_login_fails_with_wrong_creds(self, client, tmp_path):
         """POST /api/login with wrong creds returns 401."""
         from agent_control_plane.auth import create_user_with_key
+
         create_user_with_key("auth-user", "auth@test.com", role="admin")
 
-        response = client.post("/api/login",
+        response = client.post(
+            "/api/login",
             json={"email": "wrong@test.com", "api_key": "wrong_key"},
         )
         assert response.status_code == 401
@@ -507,7 +549,8 @@ class TestDashboardAuthAPI:
         _user, api_key = create_user_with_key("api-test", "api@test.com", role="operator")
 
         # Login
-        res = client.post("/api/login",
+        res = client.post(
+            "/api/login",
             json={"email": "api@test.com", "api_key": api_key},
         )
         assert res.status_code == 200

@@ -15,6 +15,7 @@ class TestGetConfiguredAgents:
     def test_get_configured_agents(self):
         """Load agents from a valid config file."""
         from agent_control_plane.discovery import get_configured_agents
+
         cfg = {
             "agents": [
                 {"name": "agent-a", "url": "http://localhost:8000", "provider": "openai"},
@@ -38,12 +39,14 @@ class TestGetConfiguredAgents:
     def test_empty_config_returns_empty(self):
         """Empty config returns empty agent list."""
         from agent_control_plane.discovery import parse_agents
+
         agents = parse_agents({})
         assert agents == []
 
     def test_no_agents_key_returns_empty(self):
         """Config without agents key returns empty list."""
         from agent_control_plane.discovery import parse_agents
+
         agents = parse_agents({"other": "data"})
         assert agents == []
 
@@ -54,6 +57,7 @@ class TestSyncInventory:
     def test_sync_inventory_new_agents(self):
         """Sync adds new agents to DB."""
         from agent_control_plane.discovery import sync_inventory
+
         cfg = {"agents": [{"name": "new-agent", "url": "http://localhost:9000"}]}
 
         with tempfile.TemporaryDirectory() as tmp:

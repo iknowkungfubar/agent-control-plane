@@ -143,8 +143,16 @@ def _record_notification(
             """INSERT INTO notification_history
                (channel, alert_type, agent_name, status, message, success, error, sent_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (channel, alert_type, agent_name, status, message, int(success), error,
-             datetime.now(UTC).isoformat()),
+            (
+                channel,
+                alert_type,
+                agent_name,
+                status,
+                message,
+                int(success),
+                error,
+                datetime.now(UTC).isoformat(),
+            ),
         )
         conn.commit()
         conn.close()
@@ -194,7 +202,9 @@ def get_notification_history(
         params.append(int(success))
 
     where_clause = (" WHERE " + " AND ".join(conditions)) if conditions else ""
-    query = f"SELECT * FROM notification_history{where_clause} ORDER BY sent_at DESC LIMIT ? OFFSET ?"
+    query = (
+        f"SELECT * FROM notification_history{where_clause} ORDER BY sent_at DESC LIMIT ? OFFSET ?"  # noqa: S608
+    )
     params.extend([limit, offset])
 
     rows = conn.execute(query, params).fetchall()
@@ -260,9 +270,7 @@ def send_test_notification(
 
         cfg = load_alert_config()
         channels = {
-            name: ch
-            for name, ch in cfg.get("channels", {}).items()
-            if ch.get("enabled", False)
+            name: ch for name, ch in cfg.get("channels", {}).items() if ch.get("enabled", False)
         }
 
     return send_notification(

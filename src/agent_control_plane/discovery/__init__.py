@@ -20,7 +20,7 @@ def scan_and_report() -> list:
 
 def sync_inventory() -> list:
     """Sync configured agents into inventory (original API)."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from agent_control_plane.inventory import get_connection, list_agents, upsert_agent
     from agent_control_plane.models import AgentRecord, AgentStatus
@@ -32,9 +32,13 @@ def sync_inventory() -> list:
 
     for ep in endpoints:
         record = AgentRecord(
-            name=ep.name, url=ep.url, provider=ep.provider,
-            status=AgentStatus.UNKNOWN, tags=ep.tags,
-            first_seen=now, last_seen=now,
+            name=ep.name,
+            url=ep.url,
+            provider=ep.provider,
+            status=AgentStatus.UNKNOWN,
+            tags=ep.tags,
+            first_seen=now,
+            last_seen=now,
         )
         upsert_agent(conn, record)
 

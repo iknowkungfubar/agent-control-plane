@@ -40,7 +40,10 @@ def _make_name(host: str, port: int, provider: str) -> str:
 
 
 def _check_provider_by_response(
-    url: str, status_code: int, body_text: str, headers: dict[str, str],
+    url: str,
+    status_code: int,
+    body_text: str,
+    headers: dict[str, str],
 ) -> str | None:
     """Identify provider from HTTP response characteristics.
 
@@ -131,20 +134,28 @@ def probe_endpoint(
                 break
 
             # Otherwise, try to identify from response
-            identified = _check_provider_by_response(url, resp.status_code, resp.text, dict(resp.headers))
+            identified = _check_provider_by_response(
+                url,
+                resp.status_code,
+                resp.text,
+                dict(resp.headers),
+            )
             if identified:
                 found_provider = identified
                 break
 
         except (httpx.ConnectError, httpx.TimeoutException, httpx.RequestError):
             continue
-        except Exception:
+        except Exception:  # noqa: BLE001, S112
             continue
 
     if found_provider is None and response_body:
         # Last resort: check if anything is running on this port
         found_provider = _check_provider_by_response(
-            base_url, 200, response_body, response_headers,
+            base_url,
+            200,
+            response_body,
+            response_headers,
         )
 
     if found_provider is None:

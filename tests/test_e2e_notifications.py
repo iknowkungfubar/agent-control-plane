@@ -47,6 +47,7 @@ class _WebhookCatcher(BaseHTTPRequestHandler):
 def webhook_server() -> Generator[int, None, None]:
     """Start a webhook catcher server on a free port."""
     import socket
+
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
@@ -65,6 +66,7 @@ def webhook_server() -> Generator[int, None, None]:
 def _temp_env():
     """Set up temp ACP_HOME for each test."""
     import tempfile
+
     with tempfile.TemporaryDirectory(prefix="acp_notify_") as tmp:
         old_home = os.environ.get("ACP_HOME")
         old_cfg = os.environ.get("ACP_CONFIG")
@@ -124,6 +126,7 @@ class TestNotificationSenders:
     def test_discord_format_down(self):
         """Discord formatter produces a valid embed payload for DOWN alerts."""
         from agent_control_plane.notifications.senders import format_discord
+
         payload = format_discord(
             alert_type="DOWN",
             agent_name="discord-test",
@@ -140,6 +143,7 @@ class TestNotificationSenders:
     def test_discord_format_recovery(self):
         """Discord formatter returns green embed for RECOVERY alerts."""
         from agent_control_plane.notifications.senders import format_discord
+
         payload = format_discord(
             alert_type="RECOVERY",
             agent_name="recovery-test",
@@ -151,6 +155,7 @@ class TestNotificationSenders:
     def test_discord_format_degraded(self):
         """Discord formatter returns yellow embed for DEGRADED alerts."""
         from agent_control_plane.notifications.senders import format_discord
+
         payload = format_discord(
             alert_type="DEGRADED",
             agent_name="deg-test",
@@ -162,6 +167,7 @@ class TestNotificationSenders:
     def test_slack_format_unchanged(self):
         """Slack formatter still works (existing contract)."""
         from agent_control_plane.notifications.senders import format_slack_blocks
+
         payload = format_slack_blocks(
             alert_type="DOWN",
             agent_name="slack-test",
@@ -174,6 +180,7 @@ class TestNotificationSenders:
     def test_webhook_format(self):
         """Webhook sender builds correct JSON payload."""
         from agent_control_plane.notifications.senders import build_webhook_payload
+
         payload = build_webhook_payload(
             alert_type="DOWN",
             agent_name="webhook-test",
@@ -285,6 +292,7 @@ class TestNotificationService:
             },
         )
         from agent_control_plane.cli import cmd_notify_list
+
         # Should not raise
         cmd_notify_list(limit=10)
 
@@ -317,12 +325,15 @@ class TestNotificationService:
 
         # Seed agent
         conn = get_connection()
-        upsert_agent(conn, AgentRecord(
-            name="integration-agent",
-            url="http://localhost:9999",
-            provider="custom",
-            status=AgentStatus.ONLINE,
-        ))
+        upsert_agent(
+            conn,
+            AgentRecord(
+                name="integration-agent",
+                url="http://localhost:9999",
+                provider="custom",
+                status=AgentStatus.ONLINE,
+            ),
+        )
         conn.close()
 
         _WebhookCatcher.received.clear()

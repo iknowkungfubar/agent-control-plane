@@ -40,7 +40,16 @@ class TestCostEstimation:
 
     def test_provider_rate_tables(self):
         """All known providers have rate entries."""
-        known = {"openai", "anthropic", "google", "mistral", "ollama", "lm-studio", "opencode", "custom"}
+        known = {
+            "openai",
+            "anthropic",
+            "google",
+            "mistral",
+            "ollama",
+            "lm-studio",
+            "opencode",
+            "custom",
+        }
         for p in known:
             assert p in PROVIDER_COST_PER_1K_IN
             assert p in PROVIDER_COST_PER_1K_OUT

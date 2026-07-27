@@ -42,13 +42,28 @@ def check_agent_health(
                 if body.get("status") == "ok":
                     return AgentStatus.ONLINE, elapsed, 200, None
                 # Agent returned 200 but status isn't "ok" — degraded
-                return AgentStatus.DEGRADED, elapsed, 200, f"unexpected status: {body.get('status')}"
+                return (
+                    AgentStatus.DEGRADED,
+                    elapsed,
+                    200,
+                    f"unexpected status: {body.get('status')}",
+                )
             except (ValueError, KeyError):
                 return AgentStatus.ONLINE, elapsed, 200, None
         elif 200 <= response.status_code < 500:
-            return AgentStatus.DEGRADED, elapsed, response.status_code, f"HTTP {response.status_code}"
+            return (
+                AgentStatus.DEGRADED,
+                elapsed,
+                response.status_code,
+                f"HTTP {response.status_code}",
+            )
         else:
-            return AgentStatus.OFFLINE, elapsed, response.status_code, f"HTTP {response.status_code}"
+            return (
+                AgentStatus.OFFLINE,
+                elapsed,
+                response.status_code,
+                f"HTTP {response.status_code}",
+            )
 
     except httpx.TimeoutException:
         return AgentStatus.OFFLINE, timeout * 1000, None, "timeout"
@@ -90,6 +105,7 @@ def run_health_checks(
 
         # Evaluate alerts
         from agent_control_plane.alerts.engine import dispatch_alerts, evaluate_alerts
+
         alerts = evaluate_alerts(endpoint.name, status)
         if alerts:
             dispatch_alerts(alerts)
@@ -106,8 +122,13 @@ def run_health_checks(
                 first_seen=existing.first_seen,
                 last_seen=datetime.now(UTC),
                 total_checks=existing.total_checks + 1,
-                successful_checks=existing.successful_checks + (1 if status == AgentStatus.ONLINE else 0),
-                avg_response_time_ms=_rolling_avg(existing.avg_response_time_ms, existing.total_checks, elapsed),
+                successful_checks=existing.successful_checks
+                + (1 if status == AgentStatus.ONLINE else 0),
+                avg_response_time_ms=_rolling_avg(
+                    existing.avg_response_time_ms,
+                    existing.total_checks,
+                    elapsed,
+                ),
             )
             upsert_agent(conn, updated)
 

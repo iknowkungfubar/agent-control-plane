@@ -39,6 +39,7 @@ def create_app() -> FastAPI:
 
     # Capture DB path at creation time so TestClient threads work
     from agent_control_plane.config import get_db_path
+
     _db_path = get_db_path()
 
     def _conn():
@@ -46,6 +47,7 @@ def create_app() -> FastAPI:
 
     # Add CORS middleware BEFORE routes
     from starlette.middleware.cors import CORSMiddleware
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -73,6 +75,7 @@ def create_app() -> FastAPI:
     def _get_session_user(request: Request):
         """Get authenticated user from session cookie."""
         from agent_control_plane.auth import get_session_user
+
         token = request.cookies.get(_SESSION_COOKIE)
         if not token:
             return None
@@ -131,7 +134,8 @@ def create_app() -> FastAPI:
     def admin_page():
         """Admin panel (minimal)."""
         # Read the admin template or just inline it
-        return HTMLResponse(content="""<!DOCTYPE html>
+        return HTMLResponse(
+            content="""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><title>Admin — ACP</title>
 <style>
@@ -185,7 +189,8 @@ def create_app() -> FastAPI:
     }
     loadAdmin();
   </script>
-</body></html>""")
+</body></html>""",
+        )
 
     # ------------------------------------------------------------------
     # Admin API endpoints
@@ -195,28 +200,40 @@ def create_app() -> FastAPI:
     def api_admin_users():
         """List all users (admin)."""
         from agent_control_plane.inventory import list_users
+
         conn = _conn()
         users = list_users(conn)
         conn.close()
-        return {"users": [
-            {"name": u.name, "email": u.email, "role": u.role.value,
-             "created_at": u.created_at.isoformat()}
-            for u in users
-        ]}
+        return {
+            "users": [
+                {
+                    "name": u.name,
+                    "email": u.email,
+                    "role": u.role.value,
+                    "created_at": u.created_at.isoformat(),
+                }
+                for u in users
+            ],
+        }
 
     @app.get("/api/admin/teams")
     def api_admin_teams():
         """List all teams with member counts (admin)."""
         from agent_control_plane.inventory import list_team_members, list_teams
+
         conn = _conn()
         teams = list_teams(conn)
         result = []
         for t in teams:
             members = list_team_members(conn, t.id)
-            result.append({
-                "id": t.id, "name": t.name, "description": t.description,
-                "member_count": len(members),
-            })
+            result.append(
+                {
+                    "id": t.id,
+                    "name": t.name,
+                    "description": t.description,
+                    "member_count": len(members),
+                },
+            )
         conn.close()
         return {"teams": result}
 
@@ -228,15 +245,20 @@ def create_app() -> FastAPI:
     def api_shadow():
         """List discovered shadow IT services."""
         from agent_control_plane.inventory import list_shadow_services
+
         conn = _conn()
         services = list_shadow_services(conn)
         conn.close()
         return {
             "services": [
                 {
-                    "id": s.id, "name": s.name, "url": s.url,
-                    "service_type": s.service_type, "risk": s.risk,
-                    "host": s.host, "port": s.port,
+                    "id": s.id,
+                    "name": s.name,
+                    "url": s.url,
+                    "service_type": s.service_type,
+                    "risk": s.risk,
+                    "host": s.host,
+                    "port": s.port,
                     "first_seen": s.first_seen.isoformat() if s.first_seen else None,
                 }
                 for s in services
@@ -247,6 +269,7 @@ def create_app() -> FastAPI:
     def api_shadow_summary():
         """Shadow IT risk summary."""
         from agent_control_plane.inventory import get_shadow_summary
+
         conn = _conn()
         summary = get_shadow_summary(conn)
         conn.close()
@@ -360,6 +383,7 @@ def create_app() -> FastAPI:
     def api_export():
         """Full inventory export as JSON."""
         from agent_control_plane.exporter import build_export_data
+
         data = build_export_data(db_path=_db_path)
         return JSONResponse(
             content=data,
@@ -371,6 +395,7 @@ def create_app() -> FastAPI:
     def api_alerts(limit: int = 50, agent: str | None = None):
         """Alert history."""
         from agent_control_plane.alerts.history import get_alert_history
+
         history = get_alert_history(agent_name=agent, limit=limit)
         return {"alerts": history, "count": len(history)}
 
@@ -382,6 +407,7 @@ def create_app() -> FastAPI:
     def api_drift_summary():
         """Drift event summary by severity."""
         from agent_control_plane.inventory import get_drift_summary
+
         conn = _conn()
         summary = get_drift_summary(conn)
         conn.close()
@@ -391,6 +417,7 @@ def create_app() -> FastAPI:
     def api_drift(limit: int = 50, agent: str | None = None, severity: str | None = None):
         """Drift detection history."""
         from agent_control_plane.inventory import get_drift_history
+
         conn = _conn()
         history = get_drift_history(conn, agent_name=agent, severity=severity, limit=limit)
         conn.close()
@@ -415,6 +442,7 @@ def create_app() -> FastAPI:
     def api_drift_agent(agent_name: str, limit: int = 50):
         """Drift history for a specific agent."""
         from agent_control_plane.inventory import get_drift_history
+
         conn = _conn()
         history = get_drift_history(conn, agent_name=agent_name, limit=limit)
         conn.close()
@@ -480,7 +508,9 @@ def create_app() -> FastAPI:
             "# TYPE acp_agent_online gauge",
         ]
         for a in agents:
-            lines.append(f'acp_agent_online{{name="{a.name}",provider="{a.provider}"}} {1 if a.status.value == "online" else 0}')
+            lines.append(
+                f'acp_agent_online{{name="{a.name}",provider="{a.provider}"}} {1 if a.status.value == "online" else 0}',
+            )
 
         lines.append("")
         lines.append("# HELP acp_agent_response_ms Average response time in milliseconds")
@@ -506,7 +536,9 @@ def create_app() -> FastAPI:
         lines.append(f"acp_fleet_agents_total {stats.total_agents}")
 
         lines.append("")
-        lines.append("# HELP acp_fleet_monthly_cost_est Estimated monthly cost for all agents (USD)")
+        lines.append(
+            "# HELP acp_fleet_monthly_cost_est Estimated monthly cost for all agents (USD)",
+        )
         lines.append("# TYPE acp_fleet_monthly_cost_est gauge")
         lines.append(f"acp_fleet_monthly_cost_est {stats.total_estimated_cost_monthly_usd}")
 
@@ -520,6 +552,7 @@ def create_app() -> FastAPI:
     def api_notification_settings():
         """Get current notification channel configuration."""
         from agent_control_plane.alerts.rules import load_alert_config
+
         cfg = load_alert_config()
         return {"channels": cfg.get("channels", {})}
 
@@ -578,6 +611,7 @@ def create_app() -> FastAPI:
     def api_notifications_summary():
         """Notification summary counts."""
         from agent_control_plane.notifications.service import get_notification_summary
+
         return get_notification_summary()
 
     # ------------------------------------------------------------------
@@ -623,5 +657,6 @@ def create_app() -> FastAPI:
 def serve_dashboard(host: str = "127.0.0.1", port: int = 8337) -> None:
     """Start the dashboard server."""
     import uvicorn
+
     app = create_app()
     uvicorn.run(app, host=host, port=port, log_level="info")

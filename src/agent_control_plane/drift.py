@@ -231,20 +231,30 @@ def set_baseline(
             return None
 
         existing = get_config_baseline(conn, agent_name)
-        resolved_provider = provider if provider is not None else (
-            existing.provider if existing else agent.provider
+        resolved_provider = (
+            provider
+            if provider is not None
+            else (existing.provider if existing else agent.provider)
         )
-        resolved_health_path = health_check_path if health_check_path is not None else (
-            existing.health_check_path if existing else "/health"
+        resolved_health_path = (
+            health_check_path
+            if health_check_path is not None
+            else (existing.health_check_path if existing else "/health")
         )
-        resolved_version = expected_version if expected_version is not None else (
-            existing.expected_version if existing else None
+        resolved_version = (
+            expected_version
+            if expected_version is not None
+            else (existing.expected_version if existing else None)
         )
-        resolved_tags = expected_tags if expected_tags is not None else (
-            existing.expected_tags if existing else list(agent.tags)
+        resolved_tags = (
+            expected_tags
+            if expected_tags is not None
+            else (existing.expected_tags if existing else list(agent.tags))
         )
-        resolved_extra = additional_fields if additional_fields is not None else (
-            existing.additional_fields if existing else {}
+        resolved_extra = (
+            additional_fields
+            if additional_fields is not None
+            else (existing.additional_fields if existing else {})
         )
         baseline = ConfigBaseline(
             agent_name=agent_name,
@@ -304,7 +314,9 @@ def check_drift(agent_name: str, timeout: float = 5.0) -> DriftReport:
         results.append(_compare_field(agent_name, "provider", baseline.provider, current_provider))
 
         # Compare tags (serialize to string for comparison)
-        expected_tags_str = ", ".join(sorted(baseline.expected_tags)) if baseline.expected_tags else ""
+        expected_tags_str = (
+            ", ".join(sorted(baseline.expected_tags)) if baseline.expected_tags else ""
+        )
         actual_tags_str = ", ".join(sorted(agent.tags)) if agent.tags else ""
         results.append(_compare_field(agent_name, "tags", expected_tags_str, actual_tags_str))
 
@@ -317,19 +329,27 @@ def check_drift(agent_name: str, timeout: float = 5.0) -> DriftReport:
             if "response_body" in probe_result:
                 body = probe_result["response_body"]
                 if isinstance(body, dict):
-                    discovered_version = str(body.get("version") or body.get("model") or body.get("service", ""))
-            results.append(_compare_field(agent_name, "version", baseline.expected_version, discovered_version))
+                    discovered_version = str(
+                        body.get("version") or body.get("model") or body.get("service", ""),
+                    )
+            results.append(
+                _compare_field(
+                    agent_name, "version", baseline.expected_version, discovered_version
+                ),
+            )
 
         # Compare health check availability
         if probe_result.get("error"):
-            results.append(DriftCheckResult(
-                agent_name=agent_name,
-                field="reachability",
-                expected="reachable",
-                actual=f"unreachable: {probe_result['error']}",
-                severity=DriftSeverity.CRITICAL,
-                message=f"Agent '{agent_name}' is unreachable for config verification",
-            ))
+            results.append(
+                DriftCheckResult(
+                    agent_name=agent_name,
+                    field="reachability",
+                    expected="reachable",
+                    actual=f"unreachable: {probe_result['error']}",
+                    severity=DriftSeverity.CRITICAL,
+                    message=f"Agent '{agent_name}' is unreachable for config verification",
+                ),
+            )
 
         # Compare additional fields from baseline
         for key, expected_val in baseline.additional_fields.items():
@@ -338,7 +358,9 @@ def check_drift(agent_name: str, timeout: float = 5.0) -> DriftReport:
                 body = probe_result["response_body"]
                 if isinstance(body, dict):
                     actual_val = str(body.get(key, ""))
-            results.append(_compare_field(agent_name, f"additional.{key}", expected_val, actual_val))
+            results.append(
+                _compare_field(agent_name, f"additional.{key}", expected_val, actual_val),
+            )
 
         # Determine overall severity
         max_sev = DriftSeverity.NONE
@@ -353,23 +375,26 @@ def check_drift(agent_name: str, timeout: float = 5.0) -> DriftReport:
         # Log drift events to database
         for r in results:
             if DriftSeverity(r.severity) != DriftSeverity.NONE:
-                log_drift(conn, DriftRecord(
-                    agent_name=r.agent_name,
-                    field_name=r.field,
-                    expected=r.expected,
-                    actual=r.actual,
-                    severity=r.severity,
-                    message=r.message,
-                    detected_at=r.checked_at,
-                ))
+                log_drift(
+                    conn,
+                    DriftRecord(
+                        agent_name=r.agent_name,
+                        field_name=r.field,
+                        expected=r.expected,
+                        actual=r.actual,
+                        severity=r.severity,
+                        message=r.message,
+                        detected_at=r.checked_at,
+                    ),
+                )
 
         # Fire drift alert if drift detected
         if drift_count > 0:
             try:
                 from agent_control_plane.alerts.engine import dispatch_drift_alert
+
                 details = "; ".join(
-                    r.message for r in results
-                    if DriftSeverity(r.severity) != DriftSeverity.NONE
+                    r.message for r in results if DriftSeverity(r.severity) != DriftSeverity.NONE
                 )
                 dispatch_drift_alert(
                     agent_name=agent_name,
@@ -377,7 +402,7 @@ def check_drift(agent_name: str, timeout: float = 5.0) -> DriftReport:
                     max_severity=max_sev.value,
                     details=details[:200],
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass  # Alert dispatch failures should not break drift check
 
         conn.commit()

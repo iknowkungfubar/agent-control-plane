@@ -48,6 +48,7 @@ class _WebhookCatcher(BaseHTTPRequestHandler):
 def webhook_server() -> Generator[int, None, None]:
     """Start a webhook catcher server on a free port."""
     import socket
+
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
@@ -66,6 +67,7 @@ def webhook_server() -> Generator[int, None, None]:
 def _temp_env():
     """Set up temp ACP_HOME for each test."""
     import tempfile
+
     with tempfile.TemporaryDirectory(prefix="acp_alerts_") as tmp:
         old_home = os.environ.get("ACP_HOME")
         old_cfg = os.environ.get("ACP_CONFIG")
@@ -118,6 +120,7 @@ class TestAlertEngine:
     def setup_method(self, method):
         """Reset alert state before each test."""
         from agent_control_plane.alerts.engine import _reset_state
+
         _reset_state()
 
     def _configure_webhook(self, port: int):
@@ -129,25 +132,31 @@ class TestAlertEngine:
         cfg_path.write_text(yaml.dump(cfg))
         # Force reload
         from agent_control_plane.alerts.engine import _reset_config_cache
+
         _reset_config_cache()
 
     def _seed_agent(self, name: str = "monitored-agent", status: AgentStatus = AgentStatus.ONLINE):
         """Insert an agent record with a given status into inventory DB."""
         from agent_control_plane.inventory import get_connection, upsert_agent
         from agent_control_plane.models import AgentRecord
+
         conn = get_connection()
-        upsert_agent(conn, AgentRecord(
-            name=name,
-            url="http://localhost:9999",
-            provider="custom",
-            status=status,
-        ))
+        upsert_agent(
+            conn,
+            AgentRecord(
+                name=name,
+                url="http://localhost:9999",
+                provider="custom",
+                status=status,
+            ),
+        )
         conn.close()
 
     def test_transition_online_to_offline_triggers_alert(self):
         """Status transition online→offline generates a DOWN alert."""
         self._seed_agent("agent-a", AgentStatus.ONLINE)
         from agent_control_plane.alerts.engine import evaluate_alerts
+
         alerts = evaluate_alerts("agent-a", AgentStatus.OFFLINE)
         assert len(alerts) >= 1
         assert any(a["type"] == "DOWN" for a in alerts)
@@ -156,6 +165,7 @@ class TestAlertEngine:
         """Status transition online→degraded generates a DEGRADED alert."""
         self._seed_agent("agent-b", AgentStatus.ONLINE)
         from agent_control_plane.alerts.engine import evaluate_alerts
+
         alerts = evaluate_alerts("agent-b", AgentStatus.DEGRADED)
         assert len(alerts) >= 1
         assert any(a["type"] == "DEGRADED" for a in alerts)
@@ -164,6 +174,7 @@ class TestAlertEngine:
         """Recovery offline→online generates a RECOVERY alert."""
         self._seed_agent("agent-c", AgentStatus.OFFLINE)
         from agent_control_plane.alerts.engine import evaluate_alerts
+
         alerts = evaluate_alerts("agent-c", AgentStatus.ONLINE)
         assert len(alerts) >= 1
         assert any(a["type"] == "RECOVERY" for a in alerts)
@@ -172,6 +183,7 @@ class TestAlertEngine:
         """Same status transition produces no alert."""
         self._seed_agent("agent-d", AgentStatus.ONLINE)
         from agent_control_plane.alerts.engine import evaluate_alerts
+
         alerts = evaluate_alerts("agent-d", AgentStatus.ONLINE)
         assert len(alerts) == 0
 
@@ -179,6 +191,7 @@ class TestAlertEngine:
         """Consecutive failures beyond threshold trigger additional alerts."""
         self._seed_agent("agent-e", AgentStatus.ONLINE)
         from agent_control_plane.alerts.engine import evaluate_alerts
+
         # First failure: transition alert fires (online→offline)
         alerts1 = evaluate_alerts("agent-e", AgentStatus.OFFLINE)
         assert len(alerts1) >= 1
@@ -192,6 +205,7 @@ class TestAlertEngine:
         self._configure_webhook(webhook_server)
         self._seed_agent("agent-f", AgentStatus.ONLINE)
         from agent_control_plane.alerts.engine import dispatch_alerts, evaluate_alerts
+
         # Need 2 consecutive to trigger threshold
         evaluate_alerts("agent-f", AgentStatus.OFFLINE)
         alerts = evaluate_alerts("agent-f", AgentStatus.OFFLINE)
@@ -208,6 +222,7 @@ class TestAlertEngine:
         self._seed_agent("agent-g", AgentStatus.ONLINE)
         from agent_control_plane.alerts.engine import dispatch_alerts, evaluate_alerts
         from agent_control_plane.alerts.history import get_alert_history
+
         # Trigger alerts
         evaluate_alerts("agent-g", AgentStatus.OFFLINE)
         alerts = evaluate_alerts("agent-g", AgentStatus.OFFLINE)
@@ -221,6 +236,7 @@ class TestAlertEngine:
         self._seed_agent("agent-h", AgentStatus.ONLINE)
         from agent_control_plane.alerts.engine import dispatch_alerts, evaluate_alerts
         from agent_control_plane.alerts.history import get_alert_history
+
         # Trigger first alert
         evaluate_alerts("agent-h", AgentStatus.OFFLINE)
         alerts1 = evaluate_alerts("agent-h", AgentStatus.OFFLINE)
@@ -237,6 +253,7 @@ class TestAlertEngine:
     def test_slack_notification_format(self):
         """Slack formatter produces valid Slack message attachments."""
         from agent_control_plane.alerts.notifications import format_slack
+
         msg = format_slack(
             alert_type="DOWN",
             agent_name="slack-test",
@@ -250,6 +267,7 @@ class TestAlertEngine:
     def test_email_notification_format(self):
         """Email formatter produces valid email content."""
         from agent_control_plane.alerts.notifications import format_email
+
         subject, body = format_email(
             alert_type="DOWN",
             agent_name="email-test",
