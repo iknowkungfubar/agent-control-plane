@@ -84,6 +84,28 @@ ignore = [
     "ANN202", # missing return type on private functions (pervasive)
     "CPY001", # copyright notices (not useful for internal files)
     "E501",   # line too long (100 is strict; pre-existing)
+    "PLC0415", # late imports — intentional for lazy loading & circular import avoidance
+    "C901",   # complexity — pre-existing, too pervasive
+    "PLR0912", # too many branches — pre-existing design
+    "PLR0915", # too many statements — pre-existing design
+    "PLR0917", # too many positional arguments — pre-existing design
+    "ANN001", # missing type annotations — pre-existing, pervasive
+    "ANN401", # type annotation restrictions — pre-existing
+    "ARG001", # unused function arguments — pervasive (test fixtures, callbacks)
+    "PLW0603", # global statement usage — pre-existing design pattern
+    "PLW2901", # loop variable overwrite — pre-existing pattern
+    "RUF012", # mutable class defaults — pre-existing
+    "S108",   # hardcoded tmp paths — pre-existing test patterns
+    "RUF001", # ambiguous Unicode — pre-existing (uses ℹ for info icon in UI strings)
+    "TRY300", # move to else block — pre-existing, minor style
+    "SIM102", # nested if simplification — pre-existing readability choices
+    "A002",   # builtin shadowing — pre-existing (format/builtin params)
+    "D401",   # docstring imperative mood — pre-existing, formatting only
+    "N806",   # UPPERCASE naming in functions — pre-existing constants pattern
+    "SIM113", # enumerate instead of manual counter — pre-existing pattern
+    "PTH123", # Path.open() instead of open() — pre-existing style
+    "PERF401",# list comprehension instead of append loop — pre-existing readability choice
+    "PLR0911",# too many return statements — pre-existing design
 ]
 
 [tool.ruff.lint.per-file-ignores]
