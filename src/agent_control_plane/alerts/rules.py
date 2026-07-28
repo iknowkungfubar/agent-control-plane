@@ -70,6 +70,6 @@ def get_agent_alert_rules(agent_name: str) -> dict[str, Any]:
         for agent in cfg.get("agents", []):
             if agent.get("name") == agent_name:
                 return agent.get("alerts", {})
-    except (KeyError, TypeError, ValueError):
+    except (FileNotFoundError, KeyError, TypeError, ValueError):
         pass
     return {}
