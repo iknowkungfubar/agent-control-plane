@@ -39,8 +39,8 @@ Existing tools (Langfuse, LangSmith, Arize) focus on **LLM tracing for developer
 git clone https://github.com/iknowkungfubar/agent-control-plane.git
 cd agent-control-plane
 
-# Install with uv (recommended)
-uv sync --group dev
+# Install with uv (recommended) — lock-pinned against the committed uv.lock
+uv sync --locked --group dev
 
 # Or with pip
 pip install -e .
@@ -517,7 +517,7 @@ acp team remove-agent --agent my-agent
 ### Setup
 
 ```bash
-uv sync --group dev
+uv sync --locked --group dev
 ```
 
 ### Run Tests
