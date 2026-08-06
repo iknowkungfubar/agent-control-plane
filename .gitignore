@@ -6,7 +6,6 @@ __pycache__/
 coverage_html/
 .pytest_cache/
 .venv/
-uv.lock
 
 # Project
 *.db
