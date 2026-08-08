@@ -117,13 +117,11 @@ class TestCLICommands:
     def test_discover_workers_help_text(self):
         """Discover help mentions the --workers flag."""
         import io
-        import sys
 
         from agent_control_plane.cli import _build_parser
 
         parser = _build_parser()
         buf = io.StringIO()
-        with pytest.raises(SystemExit):
-            with contextlib.redirect_stdout(buf):
-                parser.parse_args(["discover", "--help"])
+        with pytest.raises(SystemExit), contextlib.redirect_stdout(buf):
+            parser.parse_args(["discover", "--help"])
         assert "--workers" in buf.getvalue()

@@ -183,7 +183,7 @@ agents:
 | `acp status` | Show fleet summary statistics |
 | `acp delete <name>` | Remove an agent from inventory |
 | `acp dashboard [--host HOST] [--port PORT]` | Start the web UI dashboard |
-| `acp discover [--host HOST] [--ports PORTS] [--register]` | Auto-discover AI agents on a host |
+| `acp discover [--host HOST] [--ports PORTS] [--timeout N] [--workers N] [--register]` | Auto-discover AI agents on a host |
 
 ## Auto-Discovery
 
@@ -206,8 +206,8 @@ acp discover --host 127.0.0.1 --register --timeout 1.5
 ### How It Works
 
 The discovery engine probes ports concurrently (default 20 workers; use
-`--timeout` and the `max_workers` parameter on the Python API to tune) by making
-HTTP requests to known paths:
+`--workers` on the CLI or the `max_workers` parameter on the Python API to
+tune) by making HTTP requests to known paths:
 
 | Path | What it checks |
 |------|---------------|

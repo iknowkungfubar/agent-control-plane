@@ -34,7 +34,7 @@ class TestGetConfiguredAgents:
             assert agents[0].name == "agent-a"
             assert agents[1].provider == "anthropic"
         finally:
-            os.unlink(cfg_path)
+            Path(cfg_path).unlink()
             del os.environ["ACP_CONFIG"]
 
     def test_empty_config_returns_empty(self):
