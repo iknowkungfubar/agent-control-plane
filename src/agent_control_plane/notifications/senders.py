@@ -310,7 +310,8 @@ def send_email(
     """Send an alert email via SMTP.
 
     Args:
-        recipients: List of recipient email addresses.
+        recipients: List of recipient email addresses. A single recipient
+            may be passed as a plain string.
         subject: Email subject line.
         body: Plain-text email body.
         smtp_host: SMTP server hostname.
@@ -328,6 +329,14 @@ def send_email(
     """
     if not recipients:
         return {"success": False, "status_code": None, "error": "No recipients configured"}
+
+    if isinstance(recipients, str):
+        recipients = [recipients]
+
+    try:
+        smtp_port = int(smtp_port)
+    except (TypeError, ValueError):
+        return {"success": False, "status_code": None, "error": f"Invalid SMTP port: {smtp_port!r}"}
 
     import smtplib
     import ssl
@@ -350,7 +359,7 @@ def send_email(
                 server.login(smtp_user, smtp_password)
             server.send_message(msg)
         return {"success": True, "status_code": None, "error": None}
-    except (OSError, smtplib.SMTPException) as e:
+    except (OSError, smtplib.SMTPException, TypeError, ValueError) as e:
         return {"success": False, "status_code": None, "error": str(e)}
 
 

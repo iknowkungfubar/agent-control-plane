@@ -13,12 +13,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import sqlite3
 
-# Tables subject to retention: {table: (timestamp_column, config_key)}
-_RETENTION_TABLES: dict[str, tuple[str, str]] = {
-    "health_log": ("timestamp", "health_log_retention_days"),
-    "alert_history": ("timestamp", "alert_history_retention_days"),
-    "notification_history": ("sent_at", "notification_history_retention_days"),
-    "drift_log": ("detected_at", "drift_log_retention_days"),
+# Tables subject to retention: {table: timestamp_column}
+_RETENTION_TABLES: dict[str, str] = {
+    "health_log": "timestamp",
+    "alert_history": "timestamp",
+    "notification_history": "sent_at",
+    "drift_log": "detected_at",
 }
 
 
@@ -35,7 +35,7 @@ def enforce_retention(conn: sqlite3.Connection, retention_days: int | None = Non
 
     """
     total_deleted = 0
-    for table, (column, _key) in _RETENTION_TABLES.items():
+    for table, column in _RETENTION_TABLES.items():
         days = retention_days if retention_days is not None else get_retention_days(table)
         total_deleted += _delete_old_records(conn, table, column, days)
     return total_deleted

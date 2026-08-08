@@ -308,6 +308,111 @@ class TestEmailNotification:
         assert result["success"] is False
         assert result["error"]
 
+    def test_send_email_accepts_single_recipient_string(self):
+        """A single recipient string is treated as one address, not chars."""
+        from agent_control_plane.notifications.senders import send_email
+
+        class FakeSMTP:
+            instances: list = []
+
+            def __init__(self, host, port, timeout):
+                self.port = port
+                self.__class__.instances.append(self)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def send_message(self, msg):
+                self.sent = msg
+
+        FakeSMTP.instances.clear()
+        result = send_email(
+            recipients="ops@example.com",
+            subject="[ACP] DOWN",
+            body="agent offline",
+            smtp_class=FakeSMTP,
+        )
+        assert result["success"] is True
+        assert FakeSMTP.instances[-1].sent["To"] == "ops@example.com"
+
+    def test_send_email_accepts_string_port(self):
+        """A string SMTP port from config is normalized to int."""
+        from agent_control_plane.notifications.senders import send_email
+
+        class FakeSMTP:
+            instances: list = []
+
+            def __init__(self, host, port, timeout):
+                self.port = port
+                self.__class__.instances.append(self)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def send_message(self, msg):
+                pass
+
+        FakeSMTP.instances.clear()
+        result = send_email(
+            recipients=["ops@example.com"],
+            subject="s",
+            body="b",
+            smtp_port="587",
+            smtp_class=FakeSMTP,
+        )
+        assert result["success"] is True
+        assert FakeSMTP.instances[-1].port == 587
+
+    def test_send_email_invalid_port_returns_failure(self):
+        """A non-numeric SMTP port degrades to a failure result, not a crash."""
+        from agent_control_plane.notifications.senders import send_email
+
+        result = send_email(
+            recipients=["ops@example.com"],
+            subject="s",
+            body="b",
+            smtp_port="not-a-port",
+        )
+        assert result["success"] is False
+        assert "port" in (result.get("error") or "")
+
+    def test_send_email_bad_credential_types_returns_failure(self):
+        """Non-string credentials yield a failure result instead of raising."""
+        from agent_control_plane.notifications.senders import send_email
+
+        class StrictSMTP:
+            def __init__(self, host, port, timeout):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def login(self, user, password):
+                raise TypeError("password must be a string")
+
+            def send_message(self, msg):
+                pass
+
+        result = send_email(
+            recipients=["ops@example.com"],
+            subject="s",
+            body="b",
+            smtp_user="user",
+            smtp_password=12345,
+            smtp_class=StrictSMTP,
+        )
+        assert result["success"] is False
+        assert result["error"]
+
     def test_service_dispatches_to_email_channel(self, monkeypatch):
         """send_notification routes to the email channel with its config."""
         from agent_control_plane.notifications.service import send_notification
