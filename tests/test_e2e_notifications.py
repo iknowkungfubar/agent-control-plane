@@ -425,6 +425,60 @@ class TestEmailNotification:
         assert result["success"] is False
         assert result["error"]
 
+    def test_send_email_non_iterable_recipients_returns_failure(self):
+        """A truthy non-iterable recipients value degrades to a failure result."""
+        from agent_control_plane.notifications.senders import send_email
+
+        for bad in (12345, True, {"recipient"}):
+            result = send_email(recipients=bad, subject="s", body="b")
+            assert result["success"] is False
+            assert result["error"]
+
+    def test_service_email_use_tls_quoted_false(self, monkeypatch):
+        """A quoted use_tls: 'false' string does not enable STARTTLS."""
+        from agent_control_plane.notifications.service import send_notification
+
+        captured: dict = {}
+
+        def fake_send_email(**kwargs):
+            captured.update(kwargs)
+            return {"success": True, "status_code": None, "error": None}
+
+        monkeypatch.setattr(
+            "agent_control_plane.notifications.service.send_email",
+            fake_send_email,
+        )
+
+        send_notification(
+            alert_type="DOWN",
+            agent_name="tls-agent",
+            status="offline",
+            message="Agent down",
+            enabled_channels={
+                "email": {
+                    "enabled": True,
+                    "recipients": ["ops@example.com"],
+                    "use_tls": "false",
+                },
+            },
+        )
+        assert captured["use_tls"] is False
+
+        send_notification(
+            alert_type="DOWN",
+            agent_name="tls-agent",
+            status="offline",
+            message="Agent down",
+            enabled_channels={
+                "email": {
+                    "enabled": True,
+                    "recipients": ["ops@example.com"],
+                    "use_tls": True,
+                },
+            },
+        )
+        assert captured["use_tls"] is True
+
     def test_service_dispatches_to_email_channel(self, monkeypatch):
         """send_notification routes to the email channel with its config."""
         from agent_control_plane.notifications.service import send_notification

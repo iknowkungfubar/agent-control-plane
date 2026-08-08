@@ -333,8 +333,14 @@ def send_email(
     if isinstance(recipients, str):
         recipients = [recipients]
 
-    if not all(isinstance(r, str) and r.strip() for r in recipients):
-        return {"success": False, "status_code": None, "error": "Invalid recipient address in configuration"}
+    if not isinstance(recipients, (list, tuple)) or not all(
+        isinstance(r, str) and r.strip() for r in recipients
+    ):
+        return {
+            "success": False,
+            "status_code": None,
+            "error": "Invalid recipient address in configuration",
+        }
 
     try:
         smtp_port = int(smtp_port)

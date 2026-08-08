@@ -97,6 +97,16 @@ def create_app() -> FastAPI:
             return None
         return get_session_user(token)
 
+    def _single_user_mode() -> bool:
+        """Return True when no users exist (single-user mode), closing the DB conn."""
+        from agent_control_plane.inventory import check_single_user_mode
+
+        conn = _conn()
+        try:
+            return check_single_user_mode(conn)
+        finally:
+            conn.close()
+
     def _require_admin(request: Request):
         """Get the session user, enforcing admin access in multi-user mode.
 
@@ -107,11 +117,9 @@ def create_app() -> FastAPI:
             HTTPException: 401 if not authenticated, 403 if not an admin.
 
         """
-        from agent_control_plane.inventory import check_single_user_mode
-
         user = _get_session_user(request)
         if user is None:
-            if check_single_user_mode(_conn()):
+            if _single_user_mode():
                 return user  # Guest admin in single-user mode
             raise HTTPException(status_code=401, detail="Authentication required")
         if user.role.value != "admin":
@@ -152,9 +160,7 @@ def create_app() -> FastAPI:
     @app.get("/api/me")
     def api_me(request: Request):
         """Get current session info."""
-        from agent_control_plane.inventory import check_single_user_mode
-
-        single_user = check_single_user_mode(_conn())
+        single_user = _single_user_mode()
         user = _get_session_user(request)
         if user is None:
             return {"authenticated": False, "single_user_mode": single_user}

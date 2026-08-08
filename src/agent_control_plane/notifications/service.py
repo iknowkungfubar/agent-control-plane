@@ -22,6 +22,27 @@ from agent_control_plane.notifications.senders import (
 )
 
 
+def _as_bool(value: Any, default: bool = False) -> bool:
+    """Coerce a config value to a boolean.
+
+    Accepts real YAML booleans as well as their string spellings, so a
+    quoted ``use_tls: "false"`` does not silently enable the feature.
+
+    Args:
+        value: Raw config value (bool, str, or None).
+        default: Value to return when ``value`` is not a bool/str.
+
+    Returns:
+        The coerced boolean.
+
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return default
+
+
 def send_notification(
     alert_type: str,
     agent_name: str,
@@ -130,7 +151,7 @@ def _dispatch_to_channel(
             smtp_user=channel_cfg.get("smtp_user"),
             smtp_password=channel_cfg.get("smtp_password"),
             from_addr=channel_cfg.get("from", "acp@localhost"),
-            use_tls=bool(channel_cfg.get("use_tls", False)),
+            use_tls=_as_bool(channel_cfg.get("use_tls")),
         )
     else:
         return {"success": False, "status_code": None, "error": f"Unknown channel: {channel_name}"}
