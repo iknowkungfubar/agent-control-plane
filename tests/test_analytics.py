@@ -532,6 +532,29 @@ class TestRetentionMultiTable:
                 else:
                     del os.environ["ACP_CONFIG"]
 
+    def test_retention_non_dict_config_falls_back(self):
+        """A non-dict `retention:` section degrades to defaults, not a crash."""
+        import os
+        import tempfile
+        from pathlib import Path
+
+        from agent_control_plane.retention import get_retention_days
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg_path = Path(tmp) / "config.yaml"
+            old_cfg = os.environ.get("ACP_CONFIG")
+            os.environ["ACP_CONFIG"] = str(cfg_path)
+            try:
+                for malformed in ("retention: 90\n", "retention:\n  - 90\n"):
+                    cfg_path.write_text(malformed)
+                    assert get_retention_days("health_log") == 90  # default fallback
+                    assert get_retention_days("alert_history") == 90
+            finally:
+                if old_cfg:
+                    os.environ["ACP_CONFIG"] = old_cfg
+                else:
+                    del os.environ["ACP_CONFIG"]
+
 
 class TestAnalyticsEdgeCases:
     """Edge case coverage for analytics module."""

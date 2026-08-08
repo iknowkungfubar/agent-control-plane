@@ -479,6 +479,51 @@ class TestEmailNotification:
         )
         assert captured["use_tls"] is True
 
+    def test_service_email_use_tls_int_values(self, monkeypatch):
+        """Native YAML int use_tls: 1 enables STARTTLS; 0 disables it."""
+        from agent_control_plane.notifications.service import send_notification
+
+        captured: dict = {}
+
+        def fake_send_email(**kwargs):
+            captured.update(kwargs)
+            return {"success": True, "status_code": None, "error": None}
+
+        monkeypatch.setattr(
+            "agent_control_plane.notifications.service.send_email",
+            fake_send_email,
+        )
+
+        send_notification(
+            alert_type="DOWN",
+            agent_name="tls-agent",
+            status="offline",
+            message="Agent down",
+            enabled_channels={
+                "email": {
+                    "enabled": True,
+                    "recipients": ["ops@example.com"],
+                    "use_tls": 1,
+                },
+            },
+        )
+        assert captured["use_tls"] is True
+
+        send_notification(
+            alert_type="DOWN",
+            agent_name="tls-agent",
+            status="offline",
+            message="Agent down",
+            enabled_channels={
+                "email": {
+                    "enabled": True,
+                    "recipients": ["ops@example.com"],
+                    "use_tls": 0,
+                },
+            },
+        )
+        assert captured["use_tls"] is False
+
     def test_service_dispatches_to_email_channel(self, monkeypatch):
         """send_notification routes to the email channel with its config."""
         from agent_control_plane.notifications.service import send_notification

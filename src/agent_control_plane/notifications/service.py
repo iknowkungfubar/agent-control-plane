@@ -38,6 +38,8 @@ def _as_bool(value: Any, default: bool = False) -> bool:
     """
     if isinstance(value, bool):
         return value
+    if isinstance(value, int):
+        return value != 0
     if isinstance(value, str):
         return value.strip().lower() in ("1", "true", "yes", "on")
     return default

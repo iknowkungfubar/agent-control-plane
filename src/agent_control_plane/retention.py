@@ -90,7 +90,8 @@ def get_retention_days(table: str | None = None) -> int:
         from agent_control_plane.config import load_config
 
         cfg = load_config()
-        ret_cfg = cfg.get("retention", {}) or {}
+        ret_cfg = cfg.get("retention") or {}
+        ret_cfg = ret_cfg if isinstance(ret_cfg, dict) else {}
         cfg_days = ret_cfg.get(f"{table}_days")
 
         # Legacy top-level key for health_log
