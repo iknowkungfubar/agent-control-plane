@@ -419,6 +419,120 @@ class TestRetention:
             del os.environ["ACP_HEALTH_RETENTION_DAYS"]
 
 
+class TestRetentionMultiTable:
+    """Retention now covers alert, notification, and drift tables."""
+
+    def _insert_old_and_recent(self, conn, table, column, old_days=400, recent_days=0):
+        """Insert one old and one recent row into a table."""
+        from datetime import UTC, datetime, timedelta
+
+        now = datetime.now(UTC)
+        old_ts = (now - timedelta(days=old_days)).isoformat()
+        recent_ts = (now - timedelta(days=recent_days)).isoformat()
+
+        if table == "alert_history":
+            for ts in (old_ts, recent_ts):
+                conn.execute(
+                    "INSERT INTO alert_history (agent_name, alert_type, status, message, timestamp)"
+                    " VALUES (?, ?, ?, ?, ?)",
+                    ("ret-agent", "DOWN", "offline", "m", ts),
+                )
+        elif table == "notification_history":
+            for ts in (old_ts, recent_ts):
+                conn.execute(
+                    "INSERT INTO notification_history (channel, alert_type, agent_name, status,"
+                    " message, success, error, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    ("webhook", "DOWN", "ret-agent", "offline", "m", 1, None, ts),
+                )
+        elif table == "drift_log":
+            for ts in (old_ts, recent_ts):
+                conn.execute(
+                    "INSERT INTO drift_log (agent_name, field, expected, actual, severity,"
+                    " message, detected_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    ("ret-agent", "version", "a", "b", "high", "m", ts),
+                )
+        conn.commit()
+
+    def test_retention_cleans_alert_history(self, db_with_health_data):
+        """Old alert_history records are deleted by enforce_retention."""
+        from agent_control_plane.retention import enforce_retention
+
+        conn = get_connection()
+        self._insert_old_and_recent(conn, "alert_history", "timestamp")
+
+        deleted = enforce_retention(conn, retention_days=90)
+        rows = conn.execute("SELECT * FROM alert_history").fetchall()
+        conn.close()
+
+        assert deleted >= 1
+        assert len(rows) == 1  # Only the recent record survives
+
+    def test_retention_cleans_notification_history(self, db_with_health_data):
+        """Old notification_history records are deleted by enforce_retention."""
+        from agent_control_plane.retention import enforce_retention
+
+        conn = get_connection()
+        self._insert_old_and_recent(conn, "notification_history", "sent_at")
+
+        deleted = enforce_retention(conn, retention_days=90)
+        rows = conn.execute("SELECT * FROM notification_history").fetchall()
+        conn.close()
+
+        assert deleted >= 1
+        assert len(rows) == 1
+
+    def test_retention_cleans_drift_log(self, db_with_health_data):
+        """Old drift_log records are deleted by enforce_retention."""
+        from agent_control_plane.retention import enforce_retention
+
+        conn = get_connection()
+        self._insert_old_and_recent(conn, "drift_log", "detected_at")
+
+        deleted = enforce_retention(conn, retention_days=90)
+        rows = conn.execute("SELECT * FROM drift_log").fetchall()
+        conn.close()
+
+        assert deleted >= 1
+        assert len(rows) == 1
+
+    def test_retention_per_table_config(self, db_with_health_data):
+        """Per-table retention config keys are honored from config file."""
+        import os
+        import tempfile
+        from pathlib import Path
+
+        import yaml
+
+        from agent_control_plane.retention import get_retention_days
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = {
+                "retention": {
+                    "health_log_days": 45,
+                    "alert_history_days": 30,
+                    "notification_history_days": 60,
+                    "drift_log_days": 15,
+                },
+            }
+            cfg_path = Path(tmp) / "config.yaml"
+            with open(cfg_path, "w") as f:
+                yaml.dump(cfg, f)
+
+            old_cfg = os.environ.get("ACP_CONFIG")
+            os.environ["ACP_CONFIG"] = str(cfg_path)
+            try:
+                assert get_retention_days("health_log") == 45
+                assert get_retention_days("alert_history") == 30
+                assert get_retention_days("notification_history") == 60
+                assert get_retention_days("drift_log") == 15
+                assert get_retention_days() == 45  # default table is health_log
+            finally:
+                if old_cfg:
+                    os.environ["ACP_CONFIG"] = old_cfg
+                else:
+                    del os.environ["ACP_CONFIG"]
+
+
 class TestAnalyticsEdgeCases:
     """Edge case coverage for analytics module."""
 

@@ -187,7 +187,6 @@ def get_connection(db_path: Path | None = None) -> sqlite3.Connection:
 
 def upsert_agent(conn: sqlite3.Connection, agent: AgentRecord) -> None:
     """Insert or update an agent record."""
-    datetime.now(UTC).isoformat()
     conn.execute(
         """
         INSERT INTO agents (name, url, provider, status, tags, first_seen, last_seen,

@@ -565,11 +565,35 @@ class TestDashboardAuthAPI:
         res = client.post("/api/logout")
         assert res.status_code == 200
 
-    def test_admin_endpoints(self, client, tmp_path):
-        """GET /api/admin/users and /api/admin/teams work."""
+    def test_admin_endpoints_require_auth(self, client, tmp_path):
+        """Admin API endpoints reject unauthenticated visitors in multi-user mode."""
         from agent_control_plane.auth import create_user_with_key
 
         create_user_with_key("admin-user", "admin@test.com", role="admin")
+
+        res = client.get("/api/admin/users")
+        assert res.status_code == 401
+        res = client.get("/api/admin/teams")
+        assert res.status_code == 401
+
+    def test_admin_endpoints_reject_non_admin(self, client, tmp_path):
+        """Admin API endpoints reject logged-in non-admin users."""
+        from agent_control_plane.auth import create_user_with_key
+
+        _user, api_key = create_user_with_key("ops-user", "ops@test.com", role="operator")
+
+        client.post("/api/login", json={"email": "ops@test.com", "api_key": api_key})
+        assert client.get("/api/admin/users").status_code == 403
+        assert client.get("/api/admin/teams").status_code == 403
+
+    def test_admin_endpoints_work_for_admin(self, client, tmp_path):
+        """Admin API endpoints work for an authenticated admin."""
+        from agent_control_plane.auth import create_user_with_key
+
+        _user, api_key = create_user_with_key("admin-user", "admin@test.com", role="admin")
+
+        res = client.post("/api/login", json={"email": "admin@test.com", "api_key": api_key})
+        assert res.status_code == 200
 
         res = client.get("/api/admin/users")
         assert res.status_code == 200
@@ -586,8 +610,22 @@ class TestDashboardAuthAPI:
         assert res.status_code == 200
         assert "Sign in with your email" in res.text
 
-    def test_admin_page_renders(self, client):
-        """GET /admin returns HTML."""
+    def test_admin_page_requires_auth(self, client, tmp_path):
+        """GET /admin rejects unauthenticated visitors in multi-user mode."""
+        from agent_control_plane.auth import create_user_with_key
+
+        create_user_with_key("someone", "someone@test.com", role="viewer")
+
+        res = client.get("/admin")
+        assert res.status_code == 401
+
+    def test_admin_page_renders_for_admin(self, client, tmp_path):
+        """GET /admin renders for an authenticated admin."""
+        from agent_control_plane.auth import create_user_with_key
+
+        _user, api_key = create_user_with_key("admin-user", "admin@test.com", role="admin")
+        client.post("/api/login", json={"email": "admin@test.com", "api_key": api_key})
+
         res = client.get("/admin")
         assert res.status_code == 200
         assert "Admin Panel" in res.text

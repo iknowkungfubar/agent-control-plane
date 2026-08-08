@@ -134,6 +134,11 @@ def run_health_checks(
 
         results.append((endpoint, status, elapsed, status_code, error))
 
+    # Enforce retention policy on every check run
+    from agent_control_plane.retention import enforce_retention
+
+    enforce_retention(conn)
+
     conn.close()
     return results
 

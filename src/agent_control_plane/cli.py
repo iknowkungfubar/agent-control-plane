@@ -98,6 +98,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default=2.0,
         help="HTTP probe timeout per port (default: 2.0s)",
     )
+    discover_p.add_argument(
+        "--workers",
+        type=int,
+        default=20,
+        help="Parallel probe workers (default: 20, set 1 for sequential)",
+    )
 
     # delete
     delete_p = sub.add_parser("delete", help="Remove an agent from inventory")
@@ -482,9 +488,10 @@ def cmd_discover(
     ports: str | None = None,
     register: bool = False,
     timeout: float = 2.0,
+    workers: int = 20,
 ) -> None:
     """Auto-discover AI agents on a host."""
-    from agent_control_plane.discovery.scanner import probe_endpoint, register_discovered
+    from agent_control_plane.discovery.scanner import register_discovered, scan_ports
 
     if ports:
         port_list = []
@@ -499,24 +506,19 @@ def cmd_discover(
         port_list = [11434, 8080, 8000, 5000, 3000, 8337, 9090, 1234]
 
     console.print(f"[bold]Scanning {host} on {len(port_list)} port(s)...[/bold]")
-    found = 0
-    for port in port_list:
-        result = probe_endpoint(host, port, timeout=timeout)
-        if result is not None:
-            found += 1
-            provider_display = result.get("provider", "unknown")
-            name = result["name"]
-            console.print(
-                f"  [green]✓[/green] Port {port}: [cyan]{name}[/cyan] ({provider_display})",
-            )
-            if register:
-                record = register_discovered(result)
-                console.print(f"    Registered as '{record.name}'")
-        else:
-            console.print(f"  . Port {port} — no agent detected", style="dim")
+    results = scan_ports(host, port_list, timeout=timeout, max_workers=workers)
+    for result in results:
+        provider_display = result.get("provider", "unknown")
+        name = result["name"]
+        console.print(
+            f"  [green]✓[/green] Port {result['port']}: [cyan]{name}[/cyan] ({provider_display})",
+        )
+        if register:
+            record = register_discovered(result)
+            console.print(f"    Registered as '{record.name}'")
 
-    console.print(f"\n[bold]Discovery complete:[/bold] {found} agent(s) found")
-    if found > 0 and not register:
+    console.print(f"\n[bold]Discovery complete:[/bold] {len(results)} agent(s) found")
+    if results and not register:
         console.print("Run with --register to add discovered agents to inventory")
 
 
@@ -1135,6 +1137,7 @@ def main(argv: list[str] | None = None) -> int:
                 ports=args.ports,
                 register=args.register,
                 timeout=args.timeout,
+                workers=args.workers,
             )
         elif args.command == "config-baseline":
             cmd_config_baseline(args)

@@ -188,17 +188,28 @@ def scan_ports(
         host: Target hostname/IP.
         ports: List of ports to scan.
         timeout: HTTP probe timeout.
-        max_workers: Max parallel probes.
+        max_workers: Max parallel probes (sequential if 1).
 
     Returns:
         List of discovery result dicts.
 
     """
     results: list[dict[str, Any]] = []
-    for port in ports:
-        result = probe_endpoint(host, port, timeout)
-        if result is not None:
-            results.append(result)
+    if max_workers <= 1 or len(ports) <= 1:
+        for port in ports:
+            result = probe_endpoint(host, port, timeout)
+            if result is not None:
+                results.append(result)
+        return results
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(probe_endpoint, host, port, timeout) for port in ports]
+        for future in futures:
+            result = future.result()
+            if result is not None:
+                results.append(result)
     return results
 
 

@@ -6,6 +6,7 @@ import os
 import tempfile
 from pathlib import Path
 
+import pytest
 import yaml
 
 
@@ -49,6 +50,70 @@ class TestGetConfiguredAgents:
 
         agents = parse_agents({"other": "data"})
         assert agents == []
+
+
+class TestScanPorts:
+    """Test parallel and sequential port scanning."""
+
+    @pytest.fixture
+    def mock_agent_server(self):
+        """Start a real HTTP server that responds like an OpenAI-compatible agent."""
+        import http.server
+        import json
+        import threading
+        import time
+
+        class MockAgentHandler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path in ("/v1/models", "/health"):
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"data": [{"id": "gpt-4"}]}).encode())
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), MockAgentHandler)
+        port = server.server_address[1]
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        time.sleep(0.1)
+        yield port
+        server.shutdown()
+
+    def test_scan_ports_parallel_finds_agent(self, mock_agent_server):
+        """scan_ports with max_workers finds the live agent endpoint."""
+        from agent_control_plane.discovery.scanner import _clear_cache, scan_ports
+
+        _clear_cache()
+        ports = [mock_agent_server, mock_agent_server + 1, mock_agent_server + 2]
+        results = scan_ports("127.0.0.1", ports, timeout=2.0, max_workers=4)
+        assert len(results) == 1
+        assert results[0]["provider"] == "openai"
+        assert results[0]["port"] == mock_agent_server
+
+    def test_scan_ports_sequential_finds_agent(self, mock_agent_server):
+        """scan_ports with max_workers=1 (sequential) finds the live agent."""
+        from agent_control_plane.discovery.scanner import _clear_cache, scan_ports
+
+        _clear_cache()
+        ports = [mock_agent_server, mock_agent_server + 1]
+        results = scan_ports("127.0.0.1", ports, timeout=2.0, max_workers=1)
+        assert len(results) == 1
+        assert results[0]["port"] == mock_agent_server
+
+    def test_scan_ports_no_open_ports(self):
+        """scan_ports returns empty list when nothing responds."""
+        from agent_control_plane.discovery.scanner import _clear_cache, scan_ports
+
+        _clear_cache()
+        # Port 1 is almost always closed
+        results = scan_ports("127.0.0.1", [1, 2], timeout=0.5, max_workers=3)
+        assert results == []
 
 
 class TestSyncInventory:
