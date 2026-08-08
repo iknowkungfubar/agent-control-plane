@@ -333,6 +333,9 @@ def send_email(
     if isinstance(recipients, str):
         recipients = [recipients]
 
+    if not all(isinstance(r, str) and r.strip() for r in recipients):
+        return {"success": False, "status_code": None, "error": "Invalid recipient address in configuration"}
+
     try:
         smtp_port = int(smtp_port)
     except (TypeError, ValueError):
@@ -342,16 +345,16 @@ def send_email(
     import ssl
     from email.message import EmailMessage
 
-    msg = EmailMessage()
-    msg.set_content(body)
-    msg["Subject"] = subject
-    msg["From"] = from_addr
-    msg["To"] = ", ".join(recipients)
-
-    client_cls = smtp_class or smtplib.SMTP
-    context = ssl.create_default_context() if use_tls else None
-
     try:
+        msg = EmailMessage()
+        msg.set_content(body)
+        msg["Subject"] = subject
+        msg["From"] = from_addr
+        msg["To"] = ", ".join(recipients)
+
+        client_cls = smtp_class or smtplib.SMTP
+        context = ssl.create_default_context() if use_tls else None
+
         with client_cls(host=smtp_host, port=smtp_port, timeout=15) as server:
             if use_tls:
                 server.starttls(context=context)

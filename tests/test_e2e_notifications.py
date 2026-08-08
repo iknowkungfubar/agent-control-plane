@@ -413,6 +413,18 @@ class TestEmailNotification:
         assert result["success"] is False
         assert result["error"]
 
+    def test_send_email_non_string_recipient_returns_failure(self):
+        """A non-string recipient entry degrades to a failure result, not a crash."""
+        from agent_control_plane.notifications.senders import send_email
+
+        result = send_email(
+            recipients=["ops@example.com", 12345],
+            subject="s",
+            body="b",
+        )
+        assert result["success"] is False
+        assert result["error"]
+
     def test_service_dispatches_to_email_channel(self, monkeypatch):
         """send_notification routes to the email channel with its config."""
         from agent_control_plane.notifications.service import send_notification
