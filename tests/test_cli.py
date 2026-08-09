@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import tempfile
 from pathlib import Path
@@ -104,3 +105,23 @@ class TestCLICommands:
             assert rc == 0
             assert out.exists()
             del os.environ["ACP_HOME"]
+
+    def test_discover_with_workers_flag(self):
+        """Discover accepts --workers and runs without error."""
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["ACP_HOME"] = tmp
+            rc = main(["discover", "--host", "127.0.0.1", "--ports", "1,2", "--workers", "2"])
+            assert rc == 0
+            del os.environ["ACP_HOME"]
+
+    def test_discover_workers_help_text(self):
+        """Discover help mentions the --workers flag."""
+        import io
+
+        from agent_control_plane.cli import _build_parser
+
+        parser = _build_parser()
+        buf = io.StringIO()
+        with pytest.raises(SystemExit), contextlib.redirect_stdout(buf):
+            parser.parse_args(["discover", "--help"])
+        assert "--workers" in buf.getvalue()

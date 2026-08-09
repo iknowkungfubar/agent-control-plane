@@ -107,6 +107,25 @@ def probe_service(
     return None
 
 
+def _scan_single_host(
+    host: str,
+    ports: list[int],
+    timeout: float = 2.0,
+) -> list[dict[str, Any]]:
+    """Probe one host: TCP pre-check top ports, then deep-probe open ones."""
+    open_ports: list[int] = []
+    for port in ports[:20]:  # Check top 20 ports first
+        if _is_port_open(host, port, timeout=timeout * 0.5):
+            open_ports.append(port)
+
+    results: list[dict[str, Any]] = []
+    for port in open_ports:
+        result = probe_service(host, port, timeout=timeout)
+        if result:
+            results.append(result)
+    return results
+
+
 def scan_cidr(
     cidr: str,
     ports: list[int] | None = None,
@@ -121,7 +140,7 @@ def scan_cidr(
         ports: List of ports to scan. Defaults to all known ports.
         timeout: Per-probe timeout.
         max_hosts: Maximum hosts to scan (default 256 = /24).
-        max_workers: Ignored (sequential for simplicity).
+        max_workers: Max hosts probed concurrently (sequential if 1).
 
     Returns:
         List of discovery result dicts.
@@ -131,27 +150,26 @@ def scan_cidr(
         ports = sorted(get_all_ports())
 
     network = ipaddress.ip_network(cidr, strict=False)
-    results: list[dict[str, Any]] = []
-    hosts_scanned = 0
-
+    hosts: list[str] = []
     for host in network.hosts():
-        if hosts_scanned >= max_hosts:
+        if len(hosts) >= max_hosts:
             break
-        host_str = str(host)
-        hosts_scanned += 1
+        hosts.append(str(host))
 
-        # Quick TCP pre-check on common ports
-        open_ports: list[int] = []
-        for port in ports[:20]:  # Check top 20 ports first
-            if _is_port_open(host_str, port, timeout=timeout * 0.5):
-                open_ports.append(port)
+    results: list[dict[str, Any]] = []
+    if max_workers <= 1 or len(hosts) <= 1:
+        for host_str in hosts:
+            results.extend(_scan_single_host(host_str, ports, timeout))
+        return results
 
-        # Deep probe on open ports
-        for port in open_ports:
-            result = probe_service(host_str, port, timeout=timeout)
-            if result:
-                results.append(result)
+    from concurrent.futures import ThreadPoolExecutor
 
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(_scan_single_host, host_str, ports, timeout) for host_str in hosts
+        ]
+        for future in futures:
+            results.extend(future.result())
     return results
 
 

@@ -10,6 +10,7 @@ from agent_control_plane.alerts.history import record_alert
 from agent_control_plane.alerts.rules import get_agent_alert_rules, load_alert_config
 from agent_control_plane.inventory import get_agent
 from agent_control_plane.models import AgentStatus
+from agent_control_plane.notifications.service import send_notification
 
 # In-memory state tracking
 _last_status: dict[str, AgentStatus] = {}
@@ -94,8 +95,6 @@ def evaluate_alerts(agent_name: str, new_status: AgentStatus) -> list[dict[str, 
         "consecutive_failures",
         cfg.get("global", {}).get("consecutive_failures", 3),
     )
-    rules.get("rate_limit_seconds", cfg.get("global", {}).get("rate_limit_seconds", 300))
-
     now = datetime.now(UTC).isoformat()
 
     # Check for transition-based alerts
@@ -179,8 +178,6 @@ def dispatch_alerts(alerts: list[dict[str, Any]]) -> None:
         )
 
         # Dispatch via notification service to all enabled channels
-        from agent_control_plane.notifications.service import send_notification
-
         send_notification(
             alert_type=alert["type"],
             agent_name=alert["agent_name"],
@@ -240,56 +237,11 @@ def dispatch_drift_alert(
         message=alert["message"],
     )
 
-
-def _dispatch_webhook(url: str, alert: dict[str, Any]) -> None:
-    """POST alert as JSON to a generic webhook URL."""
-    if not url or url == "http://localhost:0/placeholder":
-        return
-    import httpx
-
-    with httpx.Client(timeout=10) as client:
-        client.post(url, json=alert)
-
-
-def _dispatch_slack(channel_cfg: dict, alert: dict[str, Any]) -> None:
-    """Send alert to Slack via webhook."""
-    url = channel_cfg.get("url", "")
-    if not url:
-        return
-    from agent_control_plane.alerts.notifications import format_slack
-
-    payload = format_slack(
-        alert_type=alert["type"],
-        agent_name=alert["agent_name"],
-        status=alert["status"],
+    # Actually dispatch to configured notification channels
+    send_notification(
+        alert_type="DRIFT",
+        agent_name=agent_name,
+        status=max_severity,
         message=alert["message"],
-    )
-    import httpx
-
-    with httpx.Client(timeout=10) as client:
-        client.post(url, json=payload)
-
-
-def _dispatch_email(channel_cfg: dict, alert: dict[str, Any]) -> None:
-    """Send alert via SMTP email."""
-    recipients = channel_cfg.get("recipients", [])
-    if not recipients:
-        return
-    from agent_control_plane.alerts.notifications import format_email, send_email
-
-    subject, body = format_email(
-        alert_type=alert["type"],
-        agent_name=alert["agent_name"],
-        status=alert["status"],
-        message=alert["message"],
-    )
-    send_email(
-        recipients=recipients,
-        subject=subject,
-        body=body,
-        smtp_host=channel_cfg.get("smtp_host", "localhost"),
-        smtp_port=channel_cfg.get("smtp_port", 25),
-        smtp_user=channel_cfg.get("smtp_user"),
-        smtp_password=channel_cfg.get("smtp_password"),
-        from_addr=channel_cfg.get("from", "acp@localhost"),
+        enabled_channels=cfg.get("channels", {}),
     )

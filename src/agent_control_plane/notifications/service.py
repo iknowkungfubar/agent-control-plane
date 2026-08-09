@@ -13,18 +13,36 @@ from agent_control_plane.inventory import get_connection
 from agent_control_plane.notifications.senders import (
     build_webhook_payload,
     format_discord,
+    format_email,
     format_slack_blocks,
     send_discord,
+    send_email,
     send_slack,
     send_webhook,
 )
 
-# Map channel names to (format_fn, send_fn) pairs
-_CHANNEL_SENDERS: dict[str, tuple[str, str]] = {
-    "webhook": ("build_webhook_payload", "send_webhook"),
-    "slack": ("format_slack_blocks", "send_slack"),
-    "discord": ("format_discord", "send_discord"),
-}
+
+def _as_bool(value: Any, default: bool = False) -> bool:
+    """Coerce a config value to a boolean.
+
+    Accepts real YAML booleans as well as their string spellings, so a
+    quoted ``use_tls: "false"`` does not silently enable the feature.
+
+    Args:
+        value: Raw config value (bool, str, or None).
+        default: Value to return when ``value`` is not a bool/str.
+
+    Returns:
+        The coerced boolean.
+
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return default
 
 
 def send_notification(
@@ -116,6 +134,27 @@ def _dispatch_to_channel(
         payload = format_discord(alert_type, agent_name, status, message)
         result = send_discord(url, payload)
 
+    elif channel_name == "email":
+        recipients = channel_cfg.get("recipients", [])
+        if not recipients:
+            return {
+                "success": False,
+                "status_code": None,
+                "error": "No email recipients configured",
+                "channel": channel_name,
+            }
+        subject, body = format_email(alert_type, agent_name, status, message)
+        result = send_email(
+            recipients=recipients,
+            subject=subject,
+            body=body,
+            smtp_host=channel_cfg.get("smtp_host", "localhost"),
+            smtp_port=channel_cfg.get("smtp_port", 25),
+            smtp_user=channel_cfg.get("smtp_user"),
+            smtp_password=channel_cfg.get("smtp_password"),
+            from_addr=channel_cfg.get("from", "acp@localhost"),
+            use_tls=_as_bool(channel_cfg.get("use_tls")),
+        )
     else:
         return {"success": False, "status_code": None, "error": f"Unknown channel: {channel_name}"}
 

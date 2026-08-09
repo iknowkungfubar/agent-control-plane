@@ -183,7 +183,7 @@ agents:
 | `acp status` | Show fleet summary statistics |
 | `acp delete <name>` | Remove an agent from inventory |
 | `acp dashboard [--host HOST] [--port PORT]` | Start the web UI dashboard |
-| `acp discover [--host HOST] [--ports PORTS] [--register]` | Auto-discover AI agents on a host |
+| `acp discover [--host HOST] [--ports PORTS] [--timeout N] [--workers N] [--register]` | Auto-discover AI agents on a host |
 
 ## Auto-Discovery
 
@@ -205,7 +205,9 @@ acp discover --host 127.0.0.1 --register --timeout 1.5
 
 ### How It Works
 
-The discovery engine probes each port by making HTTP requests to known paths:
+The discovery engine probes ports concurrently (default 20 workers; use
+`--workers` on the CLI or the `max_workers` parameter on the Python API to
+tune) by making HTTP requests to known paths:
 
 | Path | What it checks |
 |------|---------------|
@@ -275,6 +277,7 @@ alerts:
       smtp_port: 587
       smtp_user: "user@gmail.com"
       smtp_password: "app-password"
+      use_tls: true            # Optional: STARTTLS (default: false)
       from: "acp@example.com"
       recipients:
         - "ops@example.com"
@@ -390,12 +393,22 @@ Charts render with device pixel ratio support, dark-theme styling, and auto-refr
 
 ### Data Retention
 
-Health log records are automatically cleaned up to prevent unbounded database growth:
+Records are automatically pruned to prevent unbounded database growth. Retention is
+enforced automatically on every `acp health` run.
+
+```yaml
+retention:
+  health_log_days: 90            # Health check history (default: 90)
+  alert_history_days: 90         # Alert events (default: 90)
+  notification_history_days: 90  # Notification deliveries (default: 90)
+  drift_log_days: 90             # Drift detection events (default: 90)
+```
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `health_log_retention_days` in config.yaml | 90 | Max age in days for health check records |
-| `ACP_HEALTH_RETENTION_DAYS` env var | — | Overrides config value |
+| `retention.<table>_days` in config.yaml | 90 | Per-table retention in days |
+| `health_log_retention_days` in config.yaml | 90 | Legacy top-level key (health log only) |
+| `ACP_HEALTH_RETENTION_DAYS` env var | — | Overrides health log retention |
 
 ## Configuration Drift Detection
 
@@ -505,6 +518,11 @@ acp team remove-agent --agent my-agent
 2. Enter your email and API key
 3. Signed-in users see their name/role in the sidebar
 4. Admin users can access `/admin` for user/team management
+
+> **Note:** In multi-user mode, the `/admin` page and the `/api/admin/*` endpoints
+> require an authenticated admin session. Unauthenticated visitors receive `401`,
+> and non-admin users receive `403`. In single-user mode (no users configured) the
+> dashboard remains open, including the admin panel, for backward compatibility.
 
 ### User Roles
 

@@ -29,6 +29,22 @@ def _read_template(name: str) -> str:
     return template_path.read_text()
 
 
+def _escape_label(value: str) -> str:
+    """Escape a Prometheus label value.
+
+    Per the Prometheus text exposition format, backslash, double-quote
+    and newline characters inside label values must be escaped.
+
+    Args:
+        value: Raw label value.
+
+    Returns:
+        Escaped label value safe for inclusion in a metric line.
+
+    """
+    return str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     app = FastAPI(
@@ -81,6 +97,35 @@ def create_app() -> FastAPI:
             return None
         return get_session_user(token)
 
+    def _single_user_mode() -> bool:
+        """Return True when no users exist (single-user mode), closing the DB conn."""
+        from agent_control_plane.inventory import check_single_user_mode
+
+        conn = _conn()
+        try:
+            return check_single_user_mode(conn)
+        finally:
+            conn.close()
+
+    def _require_admin(request: Request):
+        """Get the session user, enforcing admin access in multi-user mode.
+
+        In single-user mode (no users configured) any visitor acts as the
+        guest admin for backward compatibility.
+
+        Raises:
+            HTTPException: 401 if not authenticated, 403 if not an admin.
+
+        """
+        user = _get_session_user(request)
+        if user is None:
+            if _single_user_mode():
+                return user  # Guest admin in single-user mode
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if user.role.value != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return user
+
     @app.post("/api/login")
     async def api_login(request: Request):
         """Authenticate user and set session cookie."""
@@ -115,14 +160,15 @@ def create_app() -> FastAPI:
     @app.get("/api/me")
     def api_me(request: Request):
         """Get current session info."""
+        single_user = _single_user_mode()
         user = _get_session_user(request)
         if user is None:
-            return {"authenticated": False}
+            return {"authenticated": False, "single_user_mode": single_user}
         return {
             "authenticated": True,
             "user": user.name,
             "role": user.role.value,
-            "single_user_mode": False,
+            "single_user_mode": single_user,
         }
 
     @app.get("/login", response_class=HTMLResponse)
@@ -131,8 +177,9 @@ def create_app() -> FastAPI:
         return HTMLResponse(content=_html_login)
 
     @app.get("/admin", response_class=HTMLResponse)
-    def admin_page():
+    def admin_page(request: Request):
         """Admin panel (minimal)."""
+        _require_admin(request)
         # Read the admin template or just inline it
         return HTMLResponse(
             content="""<!DOCTYPE html>
@@ -197,10 +244,11 @@ def create_app() -> FastAPI:
     # ------------------------------------------------------------------
 
     @app.get("/api/admin/users")
-    def api_admin_users():
+    def api_admin_users(request: Request):
         """List all users (admin)."""
         from agent_control_plane.inventory import list_users
 
+        _require_admin(request)
         conn = _conn()
         users = list_users(conn)
         conn.close()
@@ -217,10 +265,11 @@ def create_app() -> FastAPI:
         }
 
     @app.get("/api/admin/teams")
-    def api_admin_teams():
+    def api_admin_teams(request: Request):
         """List all teams with member counts (admin)."""
         from agent_control_plane.inventory import list_team_members, list_teams
 
+        _require_admin(request)
         conn = _conn()
         teams = list_teams(conn)
         result = []
@@ -509,26 +558,32 @@ def create_app() -> FastAPI:
         ]
         for a in agents:
             lines.append(
-                f'acp_agent_online{{name="{a.name}",provider="{a.provider}"}} {1 if a.status.value == "online" else 0}',
+                f'acp_agent_online{{name="{_escape_label(a.name)}",provider="{_escape_label(a.provider)}"}} {1 if a.status.value == "online" else 0}',
             )
 
         lines.append("")
         lines.append("# HELP acp_agent_response_ms Average response time in milliseconds")
         lines.append("# TYPE acp_agent_response_ms gauge")
         for a in agents:
-            lines.append(f'acp_agent_response_ms{{name="{a.name}"}} {a.avg_response_time_ms}')
+            lines.append(
+                f'acp_agent_response_ms{{name="{_escape_label(a.name)}"}} {a.avg_response_time_ms}',
+            )
 
         lines.append("")
         lines.append("# HELP acp_agent_checks_total Total health checks performed")
         lines.append("# TYPE acp_agent_checks_total counter")
         for a in agents:
-            lines.append(f'acp_agent_checks_total{{name="{a.name}"}} {a.total_checks}')
+            lines.append(
+                f'acp_agent_checks_total{{name="{_escape_label(a.name)}"}} {a.total_checks}'
+            )
 
         lines.append("")
         lines.append("# HELP acp_agent_checks_successful Successful health checks")
         lines.append("# TYPE acp_agent_checks_successful counter")
         for a in agents:
-            lines.append(f'acp_agent_checks_successful{{name="{a.name}"}} {a.successful_checks}')
+            lines.append(
+                f'acp_agent_checks_successful{{name="{_escape_label(a.name)}"}} {a.successful_checks}',
+            )
 
         lines.append("")
         lines.append("# HELP acp_fleet_agents_total Total number of agents in inventory")

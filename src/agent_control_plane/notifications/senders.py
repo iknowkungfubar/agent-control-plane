@@ -1,4 +1,4 @@
-"""Notification channel senders — formats and sends to webhook, Slack, Discord.
+"""Notification channel senders — formats and sends to webhook, Slack, Discord, email.
 
 Each sender is a standalone function that takes alert fields and returns
 a dict with 'success' and optionally 'error' keys.
@@ -243,6 +243,132 @@ def send_discord(
     except httpx.HTTPStatusError as e:
         return {"success": False, "status_code": e.response.status_code, "error": str(e)}
     except httpx.RequestError as e:
+        return {"success": False, "status_code": None, "error": str(e)}
+
+
+def format_email(
+    alert_type: str,
+    agent_name: str,
+    status: str,
+    message: str,
+) -> tuple[str, str]:
+    """Format an alert as email subject and body.
+
+    Returns:
+        Tuple of (subject, body_text).
+
+    """
+    emoji = {
+        "DOWN": "🔴",
+        "DEGRADED": "🟡",
+        "RECOVERY": "✅",
+        "DRIFT": "🔧",
+        "TEST": "🧪",
+    }.get(alert_type, "ℹ️")
+
+    subject = f"{emoji} [ACP Alert] {alert_type} — {agent_name}"
+
+    from datetime import UTC, datetime
+
+    body = f"""
+{"=" * 60}
+AGENT CONTROL PLANE — ALERT
+{"=" * 60}
+
+Type:    {alert_type}
+Agent:   {agent_name}
+Status:  {status}
+Time:    {datetime.now(UTC).isoformat()}
+
+Message:
+{message}
+
+{"=" * 60}
+This is an automated notification from Agent Control Plane.
+"""
+
+    return subject, body.strip()
+
+
+# ---------------------------------------------------------------------------
+# Email sender
+# ---------------------------------------------------------------------------
+
+
+def send_email(
+    recipients: list[str],
+    subject: str,
+    body: str,
+    smtp_host: str = "localhost",
+    smtp_port: int = 25,
+    smtp_user: str | None = None,
+    smtp_password: str | None = None,
+    from_addr: str = "acp@localhost",
+    use_tls: bool = False,
+    smtp_class: Any | None = None,
+) -> dict[str, Any]:
+    """Send an alert email via SMTP.
+
+    Args:
+        recipients: List of recipient email addresses. A single recipient
+            may be passed as a plain string.
+        subject: Email subject line.
+        body: Plain-text email body.
+        smtp_host: SMTP server hostname.
+        smtp_port: SMTP server port.
+        smtp_user: Optional SMTP auth username.
+        smtp_password: Optional SMTP auth password.
+        from_addr: From address.
+        use_tls: Use STARTTLS.
+        smtp_class: Inject a fake SMTP client class for testing.
+
+    Returns:
+        Dict with keys: success (bool), status_code (None for email),
+        error (str or None).
+
+    """
+    if not recipients:
+        return {"success": False, "status_code": None, "error": "No recipients configured"}
+
+    if isinstance(recipients, str):
+        recipients = [recipients]
+
+    if not isinstance(recipients, (list, tuple)) or not all(
+        isinstance(r, str) and r.strip() for r in recipients
+    ):
+        return {
+            "success": False,
+            "status_code": None,
+            "error": "Invalid recipient address in configuration",
+        }
+
+    try:
+        smtp_port = int(smtp_port)
+    except (TypeError, ValueError):
+        return {"success": False, "status_code": None, "error": f"Invalid SMTP port: {smtp_port!r}"}
+
+    import smtplib
+    import ssl
+    from email.message import EmailMessage
+
+    try:
+        msg = EmailMessage()
+        msg.set_content(body)
+        msg["Subject"] = subject
+        msg["From"] = from_addr
+        msg["To"] = ", ".join(recipients)
+
+        client_cls = smtp_class or smtplib.SMTP
+        context = ssl.create_default_context() if use_tls else None
+
+        with client_cls(host=smtp_host, port=smtp_port, timeout=15) as server:
+            if use_tls:
+                server.starttls(context=context)
+            if smtp_user and smtp_password:
+                server.login(smtp_user, smtp_password)
+            server.send_message(msg)
+        return {"success": True, "status_code": None, "error": None}
+    except (OSError, smtplib.SMTPException, TypeError, ValueError) as e:
         return {"success": False, "status_code": None, "error": str(e)}
 
 

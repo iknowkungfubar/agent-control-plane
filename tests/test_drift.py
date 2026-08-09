@@ -632,6 +632,110 @@ class TestDriftAlertDispatch:
         dispatch_drift_alert("test-agent", drift_count=2, max_severity="high")
         # Should not raise
 
+    def test_dispatch_drift_alert_sends_notifications(self, tmp_path, monkeypatch):
+        """DRIFT alerts are dispatched to configured notification channels."""
+        import yaml
+
+        from agent_control_plane.alerts.engine import _reset_config_cache, dispatch_drift_alert
+
+        _reset_config_cache()
+        os.environ["ACP_HOME"] = str(tmp_path)
+
+        config = {
+            "alerts": {
+                "enabled": True,
+                "global": {"rate_limit_seconds": 0},
+                "channels": {
+                    "webhook": {"enabled": True, "url": "http://hooks.example.com/acp"},
+                },
+            },
+        }
+        config_path = tmp_path / "config.yaml"
+        with open(config_path, "w") as f:
+            yaml.dump(config, f)
+        os.environ["ACP_CONFIG"] = str(config_path)
+
+        sent: list[dict] = []
+
+        def fake_send_notification(**kwargs):
+            sent.append(kwargs)
+
+        monkeypatch.setattr(
+            "agent_control_plane.alerts.engine.send_notification",
+            fake_send_notification,
+        )
+
+        dispatch_drift_alert(
+            "drift-agent",
+            drift_count=2,
+            max_severity="high",
+            details="Provider changed",
+        )
+
+        assert len(sent) == 1
+        assert sent[0]["alert_type"] == "DRIFT"
+        assert sent[0]["agent_name"] == "drift-agent"
+        assert sent[0]["status"] == "high"
+        assert "Provider changed" in sent[0]["message"]
+        assert "webhook" in sent[0]["enabled_channels"]
+
+    def test_dispatch_drift_alert_rate_limited(self, tmp_path, monkeypatch):
+        """DRIFT alerts are rate-limited per agent."""
+        import yaml
+
+        from agent_control_plane.alerts.engine import _reset_config_cache, dispatch_drift_alert
+
+        _reset_config_cache()
+        os.environ["ACP_HOME"] = str(tmp_path)
+
+        config = {
+            "alerts": {
+                "enabled": True,
+                "global": {"rate_limit_seconds": 3600},
+            },
+        }
+        config_path = tmp_path / "config.yaml"
+        with open(config_path, "w") as f:
+            yaml.dump(config, f)
+        os.environ["ACP_CONFIG"] = str(config_path)
+
+        sent: list[dict] = []
+
+        def fake_send_notification(**kwargs):
+            sent.append(kwargs)
+
+        monkeypatch.setattr(
+            "agent_control_plane.alerts.engine.send_notification",
+            fake_send_notification,
+        )
+
+        dispatch_drift_alert("rl-agent", drift_count=1, max_severity="medium")
+        dispatch_drift_alert("rl-agent", drift_count=2, max_severity="high")
+
+        assert len(sent) == 1  # Second call is rate-limited
+
+    def test_dispatch_drift_alert_records_history(self, tmp_path):
+        """DRIFT alerts are recorded in alert_history."""
+        import yaml
+
+        from agent_control_plane.alerts.engine import _reset_config_cache, dispatch_drift_alert
+        from agent_control_plane.alerts.history import get_alert_history
+
+        _reset_config_cache()
+        os.environ["ACP_HOME"] = str(tmp_path)
+
+        config = {"alerts": {"enabled": True, "global": {"rate_limit_seconds": 0}}}
+        config_path = tmp_path / "config.yaml"
+        with open(config_path, "w") as f:
+            yaml.dump(config, f)
+        os.environ["ACP_CONFIG"] = str(config_path)
+
+        dispatch_drift_alert("hist-agent", drift_count=1, max_severity="low")
+
+        history = get_alert_history(agent_name="hist-agent", alert_type="DRIFT")
+        assert len(history) == 1
+        assert history[0]["status"] == "low"
+
 
 # ---------------------------------------------------------------------------
 # E2E tests with real HTTP server
@@ -981,6 +1085,75 @@ class TestDriftAlertIntegration:
         assert (
             "critical" not in summary
         )  # No alert type "critical" in drift_log - DRIFT alerts go to alert_history table
+
+
+class TestCaptureBaselineHealthPath:
+    """capture_baseline resolves the configured health check path."""
+
+    def test_capture_baseline_uses_configured_health_path(self, tmp_path, monkeypatch):
+        """Baseline health_check_path comes from endpoint config, not the full URL."""
+        import yaml
+
+        from agent_control_plane.drift import capture_baseline
+        from agent_control_plane.inventory import (
+            get_config_baseline,
+            get_connection,
+            upsert_agent,
+        )
+        from agent_control_plane.models import AgentRecord
+
+        os.environ["ACP_HOME"] = str(tmp_path)
+        cfg = {
+            "agents": [
+                {
+                    "name": "cfg-agent",
+                    "url": "http://localhost:9999",
+                    "provider": "openai",
+                    "health_check_path": "/healthz",
+                },
+            ],
+        }
+        cfg_path = tmp_path / "config.yaml"
+        with open(cfg_path, "w") as f:
+            yaml.dump(cfg, f)
+        os.environ["ACP_CONFIG"] = str(cfg_path)
+
+        conn = get_connection()
+        upsert_agent(
+            conn,
+            AgentRecord(name="cfg-agent", url="http://localhost:9999", provider="openai"),
+        )
+        conn.close()
+
+        baseline = capture_baseline("cfg-agent", timeout=1.0)
+        assert baseline is not None
+        assert baseline.health_check_path == "/healthz"
+        assert baseline.health_check_path not in baseline.url if hasattr(baseline, "url") else True
+
+        conn = get_connection()
+        stored = get_config_baseline(conn, "cfg-agent")
+        conn.close()
+        assert stored is not None
+        assert stored.health_check_path == "/healthz"
+
+    def test_capture_baseline_defaults_health_path(self, tmp_path):
+        """Baseline health_check_path defaults to /health when not configured."""
+        from agent_control_plane.drift import capture_baseline
+        from agent_control_plane.inventory import get_connection, upsert_agent
+        from agent_control_plane.models import AgentRecord
+
+        os.environ["ACP_HOME"] = str(tmp_path)
+
+        conn = get_connection()
+        upsert_agent(
+            conn,
+            AgentRecord(name="bare-agent", url="http://localhost:9999", provider="custom"),
+        )
+        conn.close()
+
+        baseline = capture_baseline("bare-agent", timeout=1.0)
+        assert baseline is not None
+        assert baseline.health_check_path == "/health"
 
 
 # ---------------------------------------------------------------------------

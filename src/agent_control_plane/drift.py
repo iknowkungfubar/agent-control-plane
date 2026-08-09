@@ -30,6 +30,32 @@ from agent_control_plane.models import (
 )
 
 
+def _resolve_health_check_path(agent_name: str) -> str:
+    """Resolve the configured health check path for an agent.
+
+    Looks up the agent's endpoint config (which carries health_check_path)
+    and falls back to the '/health' default used by set_baseline().
+
+    Args:
+        agent_name: Name of the agent.
+
+    Returns:
+        The configured health check path (with leading slash).
+
+    """
+    try:
+        from agent_control_plane.config import load_config, parse_agents
+
+        cfg = load_config()
+        for ep in parse_agents(cfg):
+            if ep.name == agent_name:
+                path = ep.health_check_path or "/health"
+                return path if path.startswith("/") else f"/{path}"
+    except (FileNotFoundError, KeyError, TypeError, ValueError):
+        pass
+    return "/health"
+
+
 def _probe_agent_config(
     url: str,
     health_check_path: str = "/health",
@@ -167,7 +193,7 @@ def capture_baseline(agent_name: str, timeout: float = 5.0) -> ConfigBaseline | 
         baseline = ConfigBaseline(
             agent_name=agent.name,
             provider=str(getattr(agent, "provider", "custom")),
-            health_check_path=agent.url.rstrip("/") + "/health",
+            health_check_path=_resolve_health_check_path(agent_name),
             expected_tags=list(agent.tags),
             captured_by="auto",
         )

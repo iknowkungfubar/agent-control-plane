@@ -192,6 +192,400 @@ class TestNotificationSenders:
         assert payload["status"] == "offline"
 
 
+class TestEmailNotification:
+    """Tests for the email notification channel."""
+
+    def test_format_email_fields(self):
+        """Email formatter returns subject and body with alert fields."""
+        from agent_control_plane.notifications.senders import format_email
+
+        subject, body = format_email(
+            alert_type="DOWN",
+            agent_name="mail-agent",
+            status="offline",
+            message="Connection refused",
+        )
+        assert "DOWN" in subject
+        assert "mail-agent" in subject
+        assert "offline" in body
+        assert "Connection refused" in body
+
+    def test_format_email_drift_and_test_types(self):
+        """Email formatter handles DRIFT and TEST alert types."""
+        from agent_control_plane.notifications.senders import format_email
+
+        for alert_type in ("DRIFT", "TEST"):
+            subject, body = format_email(
+                alert_type=alert_type,
+                agent_name="mail-agent",
+                status="high" if alert_type == "DRIFT" else "online",
+                message=f"{alert_type} message",
+            )
+            assert alert_type in subject
+            assert f"{alert_type} message" in body
+
+    def test_send_email_success_with_fake_smtp(self):
+        """send_email sends via SMTP and returns a success result."""
+        from agent_control_plane.notifications.senders import send_email
+
+        class FakeSMTP:
+            instances: list = []
+
+            def __init__(self, host, port, timeout):
+                self.host = host
+                self.port = port
+                self.sent: list = []
+                self.__class__.instances.append(self)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def starttls(self, context=None):
+                self.tls_used = True
+
+            def login(self, user, password):
+                self.creds = (user, password)
+
+            def send_message(self, msg):
+                self.sent.append(msg)
+
+        smtp_cred = "smtp-password"
+        FakeSMTP.instances.clear()
+        result = send_email(
+            recipients=["ops@example.com"],
+            subject="[ACP] DOWN",
+            body="agent offline",
+            smtp_host="smtp.test",
+            smtp_port=587,
+            smtp_user="user",
+            smtp_password=smtp_cred,
+            from_addr="acp@example.com",
+            use_tls=True,
+            smtp_class=FakeSMTP,
+        )
+        assert result["success"] is True
+        fake = FakeSMTP.instances[-1]
+        assert len(fake.sent) == 1
+        assert fake.sent[0]["To"] == "ops@example.com"
+        assert fake.sent[0]["From"] == "acp@example.com"
+        assert fake.creds == ("user", smtp_cred)
+        assert getattr(fake, "tls_used", False) is True
+
+    def test_send_email_no_recipients(self):
+        """send_email returns failure result when no recipients configured."""
+        from agent_control_plane.notifications.senders import send_email
+
+        result = send_email(recipients=[], subject="s", body="b")
+        assert result["success"] is False
+        assert "recipients" in (result.get("error") or "")
+
+    def test_send_email_failure_result(self):
+        """send_email returns failure result when SMTP raises."""
+        from agent_control_plane.notifications.senders import send_email
+
+        class FailingSMTP:
+            def __init__(self, host, port, timeout):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def send_message(self, msg):
+                raise OSError("connection refused")
+
+        result = send_email(
+            recipients=["ops@example.com"],
+            subject="s",
+            body="b",
+            smtp_class=FailingSMTP,
+        )
+        assert result["success"] is False
+        assert result["error"]
+
+    def test_send_email_accepts_single_recipient_string(self):
+        """A single recipient string is treated as one address, not chars."""
+        from agent_control_plane.notifications.senders import send_email
+
+        class FakeSMTP:
+            instances: list = []
+
+            def __init__(self, host, port, timeout):
+                self.port = port
+                self.__class__.instances.append(self)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def send_message(self, msg):
+                self.sent = msg
+
+        FakeSMTP.instances.clear()
+        result = send_email(
+            recipients="ops@example.com",
+            subject="[ACP] DOWN",
+            body="agent offline",
+            smtp_class=FakeSMTP,
+        )
+        assert result["success"] is True
+        assert FakeSMTP.instances[-1].sent["To"] == "ops@example.com"
+
+    def test_send_email_accepts_string_port(self):
+        """A string SMTP port from config is normalized to int."""
+        from agent_control_plane.notifications.senders import send_email
+
+        class FakeSMTP:
+            instances: list = []
+
+            def __init__(self, host, port, timeout):
+                self.port = port
+                self.__class__.instances.append(self)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def send_message(self, msg):
+                pass
+
+        FakeSMTP.instances.clear()
+        result = send_email(
+            recipients=["ops@example.com"],
+            subject="s",
+            body="b",
+            smtp_port="587",
+            smtp_class=FakeSMTP,
+        )
+        assert result["success"] is True
+        assert FakeSMTP.instances[-1].port == 587
+
+    def test_send_email_invalid_port_returns_failure(self):
+        """A non-numeric SMTP port degrades to a failure result, not a crash."""
+        from agent_control_plane.notifications.senders import send_email
+
+        result = send_email(
+            recipients=["ops@example.com"],
+            subject="s",
+            body="b",
+            smtp_port="not-a-port",
+        )
+        assert result["success"] is False
+        assert "port" in (result.get("error") or "")
+
+    def test_send_email_bad_credential_types_returns_failure(self):
+        """Non-string credentials yield a failure result instead of raising."""
+        from agent_control_plane.notifications.senders import send_email
+
+        class StrictSMTP:
+            def __init__(self, host, port, timeout):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def login(self, user, password):
+                raise TypeError("password must be a string")
+
+            def send_message(self, msg):
+                pass
+
+        result = send_email(
+            recipients=["ops@example.com"],
+            subject="s",
+            body="b",
+            smtp_user="user",
+            smtp_password=12345,
+            smtp_class=StrictSMTP,
+        )
+        assert result["success"] is False
+        assert result["error"]
+
+    def test_send_email_non_string_recipient_returns_failure(self):
+        """A non-string recipient entry degrades to a failure result, not a crash."""
+        from agent_control_plane.notifications.senders import send_email
+
+        result = send_email(
+            recipients=["ops@example.com", 12345],
+            subject="s",
+            body="b",
+        )
+        assert result["success"] is False
+        assert result["error"]
+
+    def test_send_email_non_iterable_recipients_returns_failure(self):
+        """A truthy non-iterable recipients value degrades to a failure result."""
+        from agent_control_plane.notifications.senders import send_email
+
+        for bad in (12345, True, {"recipient"}):
+            result = send_email(recipients=bad, subject="s", body="b")
+            assert result["success"] is False
+            assert result["error"]
+
+    def test_service_email_use_tls_quoted_false(self, monkeypatch):
+        """A quoted use_tls: 'false' string does not enable STARTTLS."""
+        from agent_control_plane.notifications.service import send_notification
+
+        captured: dict = {}
+
+        def fake_send_email(**kwargs):
+            captured.update(kwargs)
+            return {"success": True, "status_code": None, "error": None}
+
+        monkeypatch.setattr(
+            "agent_control_plane.notifications.service.send_email",
+            fake_send_email,
+        )
+
+        send_notification(
+            alert_type="DOWN",
+            agent_name="tls-agent",
+            status="offline",
+            message="Agent down",
+            enabled_channels={
+                "email": {
+                    "enabled": True,
+                    "recipients": ["ops@example.com"],
+                    "use_tls": "false",
+                },
+            },
+        )
+        assert captured["use_tls"] is False
+
+        send_notification(
+            alert_type="DOWN",
+            agent_name="tls-agent",
+            status="offline",
+            message="Agent down",
+            enabled_channels={
+                "email": {
+                    "enabled": True,
+                    "recipients": ["ops@example.com"],
+                    "use_tls": True,
+                },
+            },
+        )
+        assert captured["use_tls"] is True
+
+    def test_service_email_use_tls_int_values(self, monkeypatch):
+        """Native YAML int use_tls: 1 enables STARTTLS; 0 disables it."""
+        from agent_control_plane.notifications.service import send_notification
+
+        captured: dict = {}
+
+        def fake_send_email(**kwargs):
+            captured.update(kwargs)
+            return {"success": True, "status_code": None, "error": None}
+
+        monkeypatch.setattr(
+            "agent_control_plane.notifications.service.send_email",
+            fake_send_email,
+        )
+
+        send_notification(
+            alert_type="DOWN",
+            agent_name="tls-agent",
+            status="offline",
+            message="Agent down",
+            enabled_channels={
+                "email": {
+                    "enabled": True,
+                    "recipients": ["ops@example.com"],
+                    "use_tls": 1,
+                },
+            },
+        )
+        assert captured["use_tls"] is True
+
+        send_notification(
+            alert_type="DOWN",
+            agent_name="tls-agent",
+            status="offline",
+            message="Agent down",
+            enabled_channels={
+                "email": {
+                    "enabled": True,
+                    "recipients": ["ops@example.com"],
+                    "use_tls": 0,
+                },
+            },
+        )
+        assert captured["use_tls"] is False
+
+    def test_service_dispatches_to_email_channel(self, monkeypatch):
+        """send_notification routes to the email channel with its config."""
+        from agent_control_plane.notifications.service import send_notification
+
+        captured: dict = {}
+
+        def fake_send_email(**kwargs):
+            captured.update(kwargs)
+            return {"success": True, "status_code": None, "error": None}
+
+        monkeypatch.setattr(
+            "agent_control_plane.notifications.service.send_email",
+            fake_send_email,
+        )
+
+        results = send_notification(
+            alert_type="DOWN",
+            agent_name="mail-agent",
+            status="offline",
+            message="Agent down",
+            enabled_channels={
+                "email": {
+                    "enabled": True,
+                    "recipients": ["ops@example.com"],
+                    "smtp_host": "smtp.example.com",
+                    "smtp_port": 587,
+                    "from": "acp@example.com",
+                },
+            },
+        )
+        assert len(results) == 1
+        assert results[0]["channel"] == "email"
+        assert results[0]["success"] is True
+        assert captured["recipients"] == ["ops@example.com"]
+        assert captured["smtp_host"] == "smtp.example.com"
+        assert "DOWN" in captured["subject"]
+
+    def test_service_skips_email_without_recipients(self, monkeypatch):
+        """send_notification reports failure for email channel without recipients."""
+        from agent_control_plane.notifications.service import send_notification
+
+        def fake_send_email(**kwargs):
+            raise AssertionError("send_email should not be called without recipients")
+
+        monkeypatch.setattr(
+            "agent_control_plane.notifications.service.send_email",
+            fake_send_email,
+        )
+
+        results = send_notification(
+            alert_type="DOWN",
+            agent_name="mail-agent",
+            status="offline",
+            message="Agent down",
+            enabled_channels={"email": {"enabled": True}},
+        )
+        assert len(results) == 1
+        assert results[0]["channel"] == "email"
+        assert results[0]["success"] is False
+        assert "recipients" in (results[0].get("error") or "")
+
+
 class TestNotificationService:
     """Tests for the notification routing service."""
 

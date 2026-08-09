@@ -306,3 +306,64 @@ class TestDashboardE2E:
             del os.environ["ACP_HOME"]
             if old_home:
                 os.environ["ACP_HOME"] = old_home
+
+    def test_metrics_endpoint(self, app_client: TestClient):
+        """GET /metrics returns Prometheus text with agent gauges."""
+        resp = app_client.get("/metrics")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/plain")
+        text = resp.text
+        assert "# TYPE acp_agent_online gauge" in text
+        assert 'acp_agent_online{name="agent-alpha",provider="openai"}' in text
+        assert "# TYPE acp_fleet_agents_total gauge" in text
+        assert "acp_fleet_agents_total" in text
+
+    def test_metrics_escapes_label_values(self):
+        """Agent/provider names with quotes are escaped in metric labels."""
+        import tempfile
+
+        from agent_control_plane.inventory import get_connection, upsert_agent
+        from agent_control_plane.models import AgentRecord, AgentStatus
+
+        with tempfile.TemporaryDirectory() as tmp:
+            old_home = os.environ.get("ACP_HOME")
+            os.environ["ACP_HOME"] = tmp
+
+            conn = get_connection()
+            upsert_agent(
+                conn,
+                AgentRecord(
+                    name='agent-"quoted"',
+                    url="http://localhost:1",
+                    provider="custom\\\\x",
+                    status=AgentStatus.ONLINE,
+                ),
+            )
+            conn.close()
+
+            from agent_control_plane.dashboard import create_app
+
+            app = create_app()
+            from starlette.testclient import TestClient
+
+            client = TestClient(app)
+            text = client.get("/metrics").text
+
+            # Raw quotes must not appear unescaped inside a label
+            assert 'name="agent-"quoted""' not in text
+            assert 'name="agent-\\"quoted\\""' in text
+            # Backslashes must be doubled in label values
+            assert 'provider="custom\\\\\\\\x"' in text
+
+            if old_home:
+                os.environ["ACP_HOME"] = old_home
+            else:
+                del os.environ["ACP_HOME"]
+
+    def test_me_single_user_mode_flag(self, app_client: TestClient):
+        """GET /api/me reports single_user_mode in an empty fleet."""
+        resp = app_client.get("/api/me")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["authenticated"] is False
+        assert data["single_user_mode"] is True
