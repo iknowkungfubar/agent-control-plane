@@ -14,7 +14,6 @@ dependencies = [
     "rich>=13.0.0",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.34.0",
-    "jinja2>=3.1.0",
 ]
 
 [project.optional-dependencies]
@@ -27,7 +26,6 @@ dev = [
     "rich>=13.0.0",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.34.0",
-    "jinja2>=3.1.0",
 ]
 
 [dependency-groups]
@@ -40,7 +38,6 @@ dev = [
     "rich>=13.0.0",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.34.0",
-    "jinja2>=3.1.0",
 ]
 
 [project.scripts]
