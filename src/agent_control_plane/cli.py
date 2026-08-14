@@ -476,7 +476,7 @@ def cmd_dashboard(host: str = "127.0.0.1", port: int = 8337) -> None:
         serve_dashboard(host=host, port=port)
     except ImportError as e:
         console.print(f"[red]✗ Dashboard dependencies not installed: {e}[/red]")
-        console.print("Run: pip install fastapi uvicorn jinja2")
+        console.print("Run: pip install fastapi uvicorn")
         sys.exit(1)
     except (ModuleNotFoundError, OSError) as e:
         console.print(f"[red]✗ Failed to start dashboard: {e}[/red]")
