@@ -595,7 +595,3 @@ PYTHONPATH="" .venv/bin/python -m pytest tests/ --cov=agent_control_plane
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-## Author
-
-iknowkungfubar — hello@turintechsolutions.com
