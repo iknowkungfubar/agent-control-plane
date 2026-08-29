@@ -37,3 +37,4 @@ ai-context.md
 *.hermes-profile  
 loop-state.json  
 loop-*.json  
+.token-policy/
